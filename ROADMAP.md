@@ -69,8 +69,20 @@
 - [x] 18 unit tests: scoring ×4, tracker ×4, profiler ×5, timeline ×5
 - [x] Architecture docs updated
 
-### Milestone 1.6 — Basic Dashboard
-- [ ] CLI tool for printer status
+### Milestone 1.6 — AI Context Engine ✅
+- [x] Context types in shared (PrinterContext, PrinterSummary, PrintHistorySummary, etc.)
+- [x] EvidenceQuality enum: Observed (sensor), Inferred (rule), Confirmed (human)
+- [x] Evidence struct: fact_type, statement, quality, confidence, timestamp, source_id
+- [x] ContextEngine subscribes to Knowledge broadcast, caches per-printer state
+- [x] query context(printer_id) → PrinterContext (AI-ready briefing)
+- [x] Designed for multi-view: TroubleshootingContext, CalibrationContext, MaintenanceContext (future)
+- [x] Profile updates populate print history, known issues, patterns, health, reliability
+- [x] Timeline events populate failures, evidence ledger
+- [x] Wired into core pipeline (7 tasks: moonraker, printer, bridge, telemetry, analyzer, knowledge, context)
+- [x] 4 unit tests: empty context, profile population, resolved issue clearing, health includes reliability
+- [x] Architecture docs updated
+
+### Milestone 1.7 — Basic Dashboard
 - [ ] Live temperature display
 - [ ] Print progress monitoring
 - [ ] Event history viewer

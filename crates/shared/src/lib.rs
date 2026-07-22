@@ -5,6 +5,7 @@
 //! logic and minimal dependencies. Every crate depends on this one;
 //! this crate depends on nothing internal.
 
+pub mod context;
 pub mod error;
 pub mod event;
 pub mod knowledge;

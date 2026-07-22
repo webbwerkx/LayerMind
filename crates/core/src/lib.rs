@@ -115,7 +115,7 @@ async fn run_pipeline(config: &Config) -> layermind_shared::error::Result<()> {
     tracing::info!("analyzer engine started");
 
     // ── Knowledge engine ────────────────────────────────────────
-    let (knowledge_engine, _knowledge_rx) =
+    let (knowledge_engine, knowledge_rx) =
         layermind_knowledge::KnowledgeEngine::new(analyzer_obs_rx);
     let knowledge_task = {
         tokio::spawn(async move {
@@ -124,6 +124,17 @@ async fn run_pipeline(config: &Config) -> layermind_shared::error::Result<()> {
     };
 
     tracing::info!("knowledge engine started");
+
+    // ── Context engine ─────────────────────────────────────────
+    let context_rx = knowledge_rx.resubscribe();
+    let context_engine = layermind_context::ContextEngine::new(context_rx);
+    let context_task = {
+        tokio::spawn(async move {
+            context_engine.run().await;
+        })
+    };
+
+    tracing::info!("context engine started");
 
     // ── Wire printer → Moonraker normalizer ──────────────────────
     let printer_task = {
@@ -163,6 +174,7 @@ async fn run_pipeline(config: &Config) -> layermind_shared::error::Result<()> {
             telemetry_task,
             analyzer_task,
             knowledge_task,
+            context_task,
         ]),
     )
     .await;

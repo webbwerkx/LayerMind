@@ -124,6 +124,20 @@ observations into persistent, structured knowledge about printers.
 Depends only on `shared`. Persistence via KnowledgeSink in database crate.
 New tables: knowledge_observations, printer_profiles, printer_timeline.
 
+### `context`
+Query layer that synthesizes knowledge into AI-consumable printer
+briefings. Subscribes to Knowledge broadcast, caches state, produces
+PrinterContext on demand.
+
+- `PrinterContext` — complete briefing: identity, health, print history,
+  current state, known issues, historical patterns, evidence ledger
+- Every fact carries `EvidenceQuality` (observed/inferred/confirmed)
+- Designed for multiple future views: TroubleshootingContext,
+  CalibrationContext, MaintenanceContext — all projections over the
+  same cached state
+
+Depends only on `shared`.
+
 ### `analyzer`
 Deterministic rules engine. Consumes canonical Envelope events and
 produces structured Observations. Independent of database, telemetry,
@@ -149,6 +163,7 @@ MoonrakerClient.run() → broadcast(RpcMessage)
         ├──→ bridge task → mpsc → TelemetryEngine.run(sink) → DatabaseSink → PostgreSQL
         └──→ AnalyzerEngine.run() → broadcast(Observation)
                 └──→ KnowledgeEngine.run() → broadcast(Knowledge)
+                        └──→ ContextEngine.run() → cached PrinterContext (queryable)
 ```
 
 ## Moonraker Integration Design

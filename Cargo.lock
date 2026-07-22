@@ -756,6 +756,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "layermind-context"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "layermind-shared",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "layermind-core"
 version = "0.1.0"
 dependencies = [
@@ -764,6 +778,7 @@ dependencies = [
  "layermind-ai",
  "layermind-analyzer",
  "layermind-config",
+ "layermind-context",
  "layermind-database",
  "layermind-knowledge",
  "layermind-logging",
