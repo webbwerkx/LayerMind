@@ -9,7 +9,10 @@
 //!
 //! Pipeline: Moonraker → Printer → Telemetry → (future: Database, AI)
 
+use std::sync::Arc;
+
 use layermind_config::Config;
+use layermind_shared::sink::Sink;
 use tokio::signal;
 use tokio::sync::{broadcast, watch};
 
@@ -27,6 +30,18 @@ pub async fn run() -> layermind_shared::error::Result<()> {
 async fn run_pipeline(config: &Config) -> layermind_shared::error::Result<()> {
     // ── Shutdown signal ──────────────────────────────────────────
     let (shutdown_tx, _shutdown_rx) = watch::channel(());
+
+    // ── Database (optional, graceful degradation) ───────────────
+    let sink: Arc<dyn Sink> = match layermind_database::Database::connect(&config.database).await {
+        Ok(db) => {
+            tracing::info!("database connected");
+            db.create_sink()
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "database unavailable, using in-memory sink");
+            Arc::new(layermind_telemetry::sink::MemorySink::new())
+        }
+    };
 
     // ── Telemetry engine ─────────────────────────────────────────
     let telemetry_config = config.telemetry.clone();
@@ -55,8 +70,9 @@ async fn run_pipeline(config: &Config) -> layermind_shared::error::Result<()> {
     // ── Wire telemetry subscriber ────────────────────────────────
     // Telemetry receives the printer's canonical envelopes.
     let telemetry_task = {
+        let sink = Arc::clone(&sink);
         tokio::spawn(async move {
-            if let Err(e) = telemetry.run(telemetry_rx).await {
+            if let Err(e) = telemetry.run(telemetry_rx, sink).await {
                 tracing::error!(error = %e, "telemetry engine failed");
             }
         })

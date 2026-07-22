@@ -28,12 +28,20 @@
 - [x] Graceful shutdown via watch channel
 - [x] Heartbeat monitoring with configurable interval
 
-### Milestone 1.3 — Telemetry Pipeline
-- [ ] Event buffering and batching
-- [ ] Database schema and migrations
-- [ ] Telemetry event storage
-- [ ] Print job lifecycle tracking
-- [ ] Event replay capability
+### Milestone 1.3 — Telemetry Pipeline ✅
+- [x] PostgreSQL storage via sqlx with connection pooling
+- [x] Schema: printers, print_jobs, telemetry_events, calibration_events, ai_observations
+- [x] Batch INSERT via UNNEST for high-throughput telemetry
+- [x] Printer auto-registration on first event
+- [x] Repository queries: recent events, print history, telemetry for print
+- [x] Storage-agnostic Sink trait (shared crate, async)
+- [x] DatabaseSink implementing Sink for PostgreSQL
+- [x] Graceful degradation: in-memory sink when DB unavailable
+- [x] Migrations via sqlx::migrate!()
+- [x] Unit tests: event type mapping, uniqueness (3 tests)
+- [x] Integration tests: auto-registration, persistence, idempotency (3 tests, DB-optional)
+- [x] Database design docs + future scaling strategy in ARCHITECTURE.md
+- [x] Live pipeline: Moonraker → Printer → Telemetry → DatabaseSink
 
 ### Milestone 1.4 — Basic Dashboard
 - [ ] CLI tool for printer status

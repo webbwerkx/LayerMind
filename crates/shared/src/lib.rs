@@ -8,4 +8,5 @@
 pub mod error;
 pub mod event;
 pub mod printer;
+pub mod sink;
 pub mod types;

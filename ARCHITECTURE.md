@@ -87,10 +87,24 @@ Implementation:
 - `run_from_moonraker()` async loop consuming broadcast channel
 
 ### `telemetry`
-Central event pipeline. Buffers incoming envelopes, enriches with metadata, batches writes to configured sinks (database, file, AI engine). Design guarantees: never drop events, timestamp at ingress, immutable events.
+Central event pipeline. Buffers incoming envelopes, enriches with metadata,
+batches writes to configured sinks. Design guarantees: never drop events,
+timestamp at ingress, immutable events.
+
+Storage-agnostic: the `Sink` trait (defined in `shared`) decouples the
+pipeline from any specific storage backend. The pipeline accepts
+`Arc<dyn Sink>` — PostgreSQL, TimescaleDB, SQLite, file export, or
+cloud storage can all be plugged in without changing telemetry code.
 
 ### `database`
-PostgreSQL schema, migrations, and typed query interfaces. Entity models: Printer, PrintJob, TelemetryEvent, Filament, Failure, Recommendation, etc.
+PostgreSQL storage backend via `sqlx`. Implements the `Sink` trait as
+`DatabaseSink` for batched telemetry event persistence. Provides:
+- Connection pooling (configurable max connections)
+- Auto-registration of unknown printers
+- Batch INSERT via UNNEST for high-throughput telemetry
+- Repository with typed queries: recent events, print history,
+  telemetry for a print, printer listing
+- SQL migrations via `sqlx::migrate!()`
 
 ### `ai`
 Event-driven intelligence engine. Subscribes to telemetry, runs detectors for known patterns (temperature instability, ringing, first layer failures), and generates structured recommendations. NOT a chatbot — background service producing structured output.
@@ -189,6 +203,118 @@ point-to-point pipelines. Advantages:
 - Backpressure handling — lagging consumers get `Lagged` errors
 - Easy testing — inject events directly into channels
 - Zero-copy within the process
+
+## Database Design
+
+### Schema (5 tables)
+
+| Table | Purpose | Key Columns |
+|-------|---------|-------------|
+| `printers` | Registered printer metadata | `id`, `last_seen` |
+| `print_jobs` | Print job lifecycle summaries | `id`, `printer_id`, `status`, `start_time`, `end_time` |
+| `telemetry_events` | Primary time-series event store | `id`, `printer_id`, `event_type`, `payload` (JSONB), `recorded_at` |
+| `calibration_events` | Calibration results | `id`, `printer_id`, `cal_type`, `values` (JSONB) |
+| `ai_observations` | AI-generated observations (future) | `id`, `printer_id`, `category`, `observation`, `confidence` |
+
+### Data Lifecycle
+
+```
+Printer Event (canonical Envelope)
+        │
+        ▼
+  TelemetryEngine::run(rx, sink)
+        │
+        ├── Buffer (up to config.buffer_size events)
+        ├── Timed flush (config.flush_interval_secs)
+        │
+        ▼
+  Sink::write_batch()
+        │
+        ▼
+  DatabaseSink
+        │
+        ├── Auto-register unknown printers (UPSERT)
+        └── Batch INSERT via UNNEST
+               │
+               ▼
+         telemetry_events table
+         (immutable, append-only)
+```
+
+### Batch Insert Strategy
+
+Telemetry events arrive at high frequency (~10 status updates/second from
+Moonraker). Row-by-row INSERT would create excessive round-trips. Instead,
+`DatabaseSink` uses PostgreSQL's `UNNEST` to insert entire batches in a single
+statement:
+
+```sql
+INSERT INTO telemetry_events (id, printer_id, event_type, payload, recorded_at)
+SELECT * FROM UNNEST($1::uuid[], $2::uuid[], $3::text[], $4::jsonb[], $5::timestamptz[])
+```
+
+This achieves near line-rate ingestion with a single database round-trip
+per batch (up to 4096 rows by default).
+
+### Index Strategy
+
+- `idx_telemetry_printer_time` — (printer_id, recorded_at DESC) — primary query path
+- `idx_telemetry_type` — (event_type) — filtering by event kind
+- `idx_telemetry_job` — (print_job_id) WHERE NOT NULL — linking events to jobs
+
+These indexes are compatible with TimescaleDB hypertable conversion.
+
+## Future Telemetry Scaling
+
+This section documents planned but not yet implemented scaling patterns.
+
+### Telemetry Aggregation
+
+High-frequency events (temperature updates at 1Hz, position at 10Hz) produce
+large volumes of data. A future aggregation layer should:
+
+- Downsample raw events into statistical summaries (min/max/avg/stddev per minute)
+- Store raw data for a sliding window (e.g., 7 days)
+- Store aggregated data indefinitely
+- Allow query-time choice: recent precision vs. historical summary
+
+### Raw vs. Summarized Events
+
+| Tier | Retention | Resolution | Use Case |
+|------|-----------|------------|----------|
+| Hot (raw) | 7 days | Per-event | Live monitoring, debugging, AI analysis |
+| Warm (1-min aggregates) | 90 days | Per-minute stats | Trend analysis, health scoring |
+| Cold (1-hour aggregates) | Forever | Per-hour stats | Long-term printer history, fleet analytics |
+
+### TimescaleDB Migration Path
+
+Schema is already compatible. Migration steps:
+
+1. `SELECT create_hypertable('telemetry_events', 'recorded_at');`
+2. `SELECT add_compression_policy('telemetry_events', INTERVAL '7 days');`
+3. `SELECT add_retention_policy('telemetry_events', INTERVAL '90 days');`
+
+### Retention Policies
+
+- Raw events: 7 days (configurable)
+- Aggregated stats: 90 days
+- Print job summaries: indefinitely
+- AI observations: indefinitely
+- Calibration history: indefinitely
+
+### Compression
+
+TimescaleDB native columnar compression can achieve 10-20x reduction on
+telemetry data. JSONB payloads benefit especially from dictionary compression
+due to repeated keys across events.
+
+### Long-Running Printer Deployments
+
+A printer running 24/7 at 10 events/second produces ~864,000 events/day.
+Over a year: ~315M events. The aggregation and retention strategy above
+keeps this manageable: ~6M raw events in the hot window, ~130K aggregate
+rows in warm, and ~9K aggregate rows in cold — a 35,000:1 overall compression
+ratio while preserving forensic detail for recent prints.
 
 ## Testing Strategy
 

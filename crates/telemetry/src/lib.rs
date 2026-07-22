@@ -8,15 +8,19 @@
 //! - Never drop events. Buffer and retry.
 //! - Timestamp at ingress, not egress.
 //! - Events are immutable once emitted.
+//! - Storage-agnostic via the `Sink` trait.
+
+use std::sync::Arc;
 
 use layermind_config::TelemetryConfig;
 use layermind_shared::error::Result;
 use layermind_shared::event::Envelope;
+use layermind_shared::sink::Sink;
 use tokio::sync::mpsc;
 
 mod buffer;
 mod pipeline;
-mod sink;
+pub mod sink;
 
 /// The telemetry engine. Accepts envelopes and manages the pipeline.
 pub struct TelemetryEngine {
@@ -38,8 +42,9 @@ impl TelemetryEngine {
         self.tx.clone()
     }
 
-    pub async fn run(self, rx: mpsc::Receiver<Envelope>) -> Result<()> {
+    /// Run the pipeline, writing events to the given sink.
+    pub async fn run(self, rx: mpsc::Receiver<Envelope>, sink: Arc<dyn Sink>) -> Result<()> {
         tracing::info!("telemetry engine starting");
-        pipeline::run(rx, &self.config).await
+        pipeline::run(rx, &self.config, sink).await
     }
 }

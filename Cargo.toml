@@ -29,6 +29,8 @@ thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 anyhow = "1"
+async-trait = "0.1"
+sqlx = { version = "0.8", features = ["postgres", "runtime-tokio", "tls-rustls", "migrate", "chrono", "uuid"] }
 
 # LayerMind internal crates
 layermind-shared = { path = "crates/shared" }
