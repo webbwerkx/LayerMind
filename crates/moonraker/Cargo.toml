@@ -10,8 +10,16 @@ rust-version.workspace = true
 layermind-shared.workspace = true
 layermind-config.workspace = true
 layermind-logging.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["full"] }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+tokio-tungstenite = { version = "0.26", features = ["connect"] }
+futures-util = "0.3"
+tungstenite = "0.26"
+url = "2"
+
+[dev-dependencies]
+tokio-tungstenite = { version = "0.26", features = ["connect"] }
+tokio-test = "0.4"

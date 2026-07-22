@@ -7,59 +7,122 @@
 //! - Starting and supervising all sub-services.
 //! - Graceful shutdown.
 //!
-//! This is the entry point for the LayerMind daemon.
+//! Pipeline: Moonraker → Printer → Telemetry → (future: Database, AI)
 
 use layermind_config::Config;
-use layermind_shared::error::Result;
 use tokio::signal;
-use tracing::Instrument;
-
-mod service;
+use tokio::sync::{broadcast, watch};
 
 /// Run the LayerMind daemon.
-pub async fn run() -> Result<()> {
+pub async fn run() -> layermind_shared::error::Result<()> {
     let config = Config::load()?;
     layermind_logging::init(&config.logging);
 
     tracing::info!(version = env!("CARGO_PKG_VERSION"), "LayerMind starting");
 
-    let manager = ServiceManager::new(config);
-    manager.run().await
+    run_pipeline(&config).await
 }
 
-/// Manages the lifecycle of all LayerMind services.
-pub struct ServiceManager {
-    config: Config,
-}
+/// Build and run the full observation pipeline.
+async fn run_pipeline(config: &Config) -> layermind_shared::error::Result<()> {
+    // ── Shutdown signal ──────────────────────────────────────────
+    let (shutdown_tx, _shutdown_rx) = watch::channel(());
 
-impl ServiceManager {
-    pub fn new(config: Config) -> Self {
-        Self { config }
-    }
+    // ── Telemetry engine ─────────────────────────────────────────
+    let telemetry_config = config.telemetry.clone();
+    let (telemetry, telemetry_rx) =
+        layermind_telemetry::TelemetryEngine::new(telemetry_config.clone());
+    let telemetry_tx = telemetry.sender();
 
-    pub async fn run(&self) -> Result<()> {
-        tracing::info!("initializing services");
+    tracing::info!("telemetry engine ready");
 
-        // TODO: Wire up actual service graph:
-        //   1. Connect database (optional, graceful degradation)
-        //   2. Start telemetry engine
-        //   3. Create printer instance
-        //   4. Connect Moonraker client
-        //   5. Normalize via printer
-        //   6. Route to telemetry
-        //   7. Start AI engine (subscribes to telemetry)
-        //   8. Wait for shutdown signal
+    // ── Printer (normalization layer) ────────────────────────────
+    let (printer, printer_rx) = layermind_printer::Printer::new(
+        config.moonraker.url.clone(), // printer ID is the Moonraker URL for now
+        "Default Printer".into(),
+    );
+    let _printer_tx = printer.sender();
 
-        tracing::info!("all services initialized, waiting for shutdown signal");
-        shutdown_signal().await;
+    tracing::info!(printer_id = %printer.id(), "printer instance created");
 
-        self.graceful_shutdown().await
-    }
+    // ── Moonraker client ─────────────────────────────────────────
+    let moonraker_config = config.moonraker.clone();
+    let (moonraker, moonraker_rx) =
+        layermind_moonraker::MoonrakerClient::new(moonraker_config.clone());
 
-    async fn graceful_shutdown(&self) -> Result<()> {
-        tracing::info!("shutting down LayerMind");
-        Ok(())
-    }
+    tracing::info!(url = %moonraker_config.url, "Moonraker client ready");
+
+    // ── Wire telemetry subscriber ────────────────────────────────
+    // Telemetry receives the printer's canonical envelopes.
+    let telemetry_task = {
+        tokio::spawn(async move {
+            if let Err(e) = telemetry.run(telemetry_rx).await {
+                tracing::error!(error = %e, "telemetry engine failed");
+            }
+        })
+    };
+
+    // ── Wire printer → telemetry bridge ──────────────────────────
+    // Forward all printer envelopes to telemetry.
+    // TODO: In the future, tee to AI engine and database here.
+    let mut printer_forward_rx = printer_rx;
+    let bridge_task = {
+        let telemetry_tx = telemetry_tx.clone();
+        tokio::spawn(async move {
+            loop {
+                match printer_forward_rx.recv().await {
+                    Ok(envelope) => {
+                        if let Err(e) = telemetry_tx.send(envelope).await {
+                            tracing::warn!(error = %e, "telemetry channel full, dropping event");
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(n)) => {
+                        tracing::warn!(skipped = n, "bridge lagging");
+                    }
+                    Err(broadcast::error::RecvError::Closed) => break,
+                }
+            }
+            tracing::info!("printer → telemetry bridge stopped");
+        })
+    };
+
+    // ── Wire printer → Moonraker normalizer ──────────────────────
+    let printer_task = {
+        tokio::spawn(async move {
+            printer.run_from_moonraker(moonraker_rx).await;
+        })
+    };
+
+    // ── Moonraker connection ─────────────────────────────────────
+    let moonraker_shutdown2 = shutdown_tx.subscribe();
+    let moonraker_task = {
+        tokio::spawn(async move {
+            if let Err(e) = moonraker.run(moonraker_shutdown2).await {
+                tracing::error!(error = %e, "Moonraker client failed");
+            }
+        })
+    };
+
+    tracing::info!("all services started — pipeline active");
+    tracing::info!("Moonraker → Printer → Telemetry → (sink)");
+
+    // ── Wait for shutdown ────────────────────────────────────────
+    shutdown_signal().await;
+
+    tracing::info!("shutdown initiated, stopping services");
+
+    // Signal all services to stop.
+    let _ = shutdown_tx.send(());
+
+    // Wait for tasks with a timeout.
+    let _ = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        futures_util::future::join_all([moonraker_task, printer_task, bridge_task, telemetry_task]),
+    )
+    .await;
+
+    tracing::info!("LayerMind shut down cleanly");
+    Ok(())
 }
 
 /// Wait for SIGINT or SIGTERM.

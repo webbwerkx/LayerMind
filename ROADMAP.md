@@ -15,12 +15,18 @@
 - [x] Git repository initialized
 - [x] README, ARCHITECTURE, ROADMAP, CONTRIBUTING written
 
-### Milestone 1.2 — Moonraker Integration
-- [ ] WebSocket connection with authentication
-- [ ] Subscription to printer objects
-- [ ] Automatic reconnection with exponential backoff
-- [ ] Raw message normalization
-- [ ] Integration tests with mock Moonraker server
+### Milestone 1.2 — Moonraker Integration ✅
+- [x] WebSocket connection with authentication
+- [x] Subscription to printer objects (8 objects: heater_bed, extruder, print_stats, virtual_sdcard, toolhead, motion_report, gcode_move, fan)
+- [x] Automatic reconnection with exponential backoff (1s→60s cap)
+- [x] JSON-RPC message parsing and typed status update model
+- [x] Event normalization with change detection (temp 0.5°C, position 0.1mm, speed 1.0mm/s, fan 2%)
+- [x] Print state machine (idle→printing→paused→complete/failed/cancelled)
+- [x] Integration tests with mock Moonraker WebSocket server (3 tests)
+- [x] Unit tests for backoff, parsing, normalization, change suppression (7 tests)
+- [x] Live pipeline wired in core: Moonraker → Printer → Telemetry
+- [x] Graceful shutdown via watch channel
+- [x] Heartbeat monitoring with configurable interval
 
 ### Milestone 1.3 — Telemetry Pipeline
 - [ ] Event buffering and batching

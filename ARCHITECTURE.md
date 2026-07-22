@@ -67,8 +67,24 @@ Structured logging via `tracing`. Supports human-readable and JSON output modes.
 ### `moonraker`
 Pure protocol adapter for Moonraker's WebSocket API. Connects, authenticates, subscribes to printer objects, and publishes raw JSON-RPC messages. No business logic.
 
+Implementation:
+- `tokio-tungstenite` for async WebSocket
+- JSON-RPC 2.0 request/response with typed status update model
+- Exponential backoff reconnect (1s → 2s → 4s ... → 60s cap)
+- Heartbeat monitoring (configurable interval)
+- Graceful shutdown via `tokio::sync::watch`
+
 ### `printer`
 Normalization layer. Consumes raw protocol messages from integration crates and produces canonical `Event` envelopes. Maintains printer state machine. This is where Moonraker-specific JSON becomes generic LayerMind events.
+
+Implementation:
+- `NormalizerState` tracks last-seen values for change detection
+- Temperature change threshold: 0.5°C
+- Position change threshold: 0.1mm
+- Speed change threshold: 1.0 mm/s
+- Fan speed change threshold: 2%
+- Stateful print state tracking (emits only on transitions)
+- `run_from_moonraker()` async loop consuming broadcast channel
 
 ### `telemetry`
 Central event pipeline. Buffers incoming envelopes, enriches with metadata, batches writes to configured sinks (database, file, AI engine). Design guarantees: never drop events, timestamp at ingress, immutable events.
@@ -82,31 +98,113 @@ Event-driven intelligence engine. Subscribes to telemetry, runs detectors for kn
 ### `core`
 Service orchestration. Loads config, initializes logging, wires the dependency graph, manages graceful shutdown. Entry point for the LayerMind daemon.
 
+Wired pipeline:
+```
+MoonrakerClient.run() → broadcast(RpcMessage)
+    → Printer.run_from_moonraker() → broadcast(Envelope)
+        → bridge task → mpsc → TelemetryEngine.run()
+```
+
+## Moonraker Integration Design
+
+### Connection Lifecycle
+
+1. **Connect** — `tokio_tungstenite::connect_async` to `ws://host:7125/websocket`
+2. **Authenticate** — If `api_key` configured, send `access.oneshot_token`
+3. **Subscribe** — JSON-RPC `printer.objects.subscribe` for 8 printer objects
+4. **Receive** — Continuous stream of `notify_status_update` notifications
+5. **Reconnect** — On error, close frame, or heartbeat timeout → backoff → reconnect
+6. **Shutdown** — On `watch::Receiver` signal, send close frame and exit cleanly
+
+### Subscribed Printer Objects
+
+| Moonraker Object | LayerMind Events |
+|-----------------|-----------------|
+| `heater_bed` | `TemperatureUpdate` |
+| `extruder` | `TemperatureUpdate` |
+| `print_stats` | `PrintStarted`, `PrintPaused`, `PrintCompleted`, `PrintFailed`, `PrintCancelled`, `StateChanged` |
+| `virtual_sdcard` | `PrintProgress` (with estimated time remaining) |
+| `toolhead` | `PositionUpdate` |
+| `motion_report` | `SpeedUpdate` |
+| `gcode_move` | (future: feedrate/flow factor events) |
+| `fan` | `FanUpdate` |
+
+### Change Detection
+
+To avoid flooding the event bus, the normalizer suppresses redundant events:
+
+- Temperature: emit only when any sensor changes ≥ 0.5°C
+- Fan: emit only when speed changes ≥ 2%
+- Position: emit only when any axis moves ≥ 0.1mm
+- Speed: emit only when velocity changes ≥ 1.0 mm/s
+- Print state: emit only on actual state string transitions
+
+### Reconnection Strategy
+
+Exponential backoff: 1s → 2s → 4s → 8s → 16s → 32s → 60s (capped).
+Backoff resets on successful connection. Shutdown signal during backoff
+exits immediately.
+
+### Error Handling
+
+- WebSocket errors → reconnect with backoff
+- JSON parse failures → logged, message skipped, connection maintained
+- Broadcast channel full → oldest subscriber dropped (Lagged)
+- Heartbeat timeout → treat as disconnection, reconnect
+- Server close frame → reconnect
+
 ## Data Flow
 
 ```
-Moonraker WebSocket
+Moonraker WebSocket (ws://host:7125/websocket)
         │
         ▼
-  [moonraker crate]  ── RawMessage ──►
-        │
+  [moonraker crate]  ── RpcMessage (broadcast) ──►
+        │  • tokio-tungstenite WebSocket client
+        │  • JSON-RPC 2.0 subscribe/notify
+        │  • Exponential backoff reconnect
+        │  • Heartbeat monitoring
+        │  • Graceful shutdown via watch channel
         ▼
-  [printer crate]    ── Envelope ──►
-        │
+  [printer crate]    ── Envelope (broadcast) ──►
+        │  • Normalizes Moonraker objects → canonical Events
+        │  • Change detection thresholds
+        │  • Print state machine
+        │  • Duplicate event suppression
         ▼
-  [telemetry crate]  ── batch ──►  [database crate]
-        │
+  [telemetry crate]  ── batch (mpsc) ──►  [database crate]
+        │  • Buffer + timed flush
+        │  • Never-drop guarantee
         ▼
   [ai crate]         ── Recommendation ──►  [database crate]
 ```
 
 ## Event Bus
 
-Internal communication uses `tokio::sync::broadcast` channels. Each service publishes to its channel; consumers subscribe. This provides:
+Internal communication uses `tokio::sync::broadcast` channels for
+fan-out (one producer → many consumers) and `tokio::sync::mpsc` for
+point-to-point pipelines. Advantages:
 
-- Loose coupling — services don't know about each other
-- Backpressure handling — lagging consumers get `Lagged` errors and can recover
+- Loose coupling — services don't import each other
+- Backpressure handling — lagging consumers get `Lagged` errors
 - Easy testing — inject events directly into channels
+- Zero-copy within the process
+
+## Testing Strategy
+
+### Unit Tests
+- Backoff calculation correctness
+- JSON-RPC message parsing
+- Normalizer event conversion
+- Change detection suppression
+- Print state transitions
+
+### Integration Tests
+- Mock Moonraker WebSocket server
+- Connection lifecycle (connect → receive → disconnect)
+- Reconnection behavior
+- Graceful shutdown
+- Message flow end-to-end
 
 ## Design Decisions
 
@@ -124,6 +222,9 @@ A 3D printer generates a continuous stream of events. An event-driven architectu
 
 ### Why not gRPC/HTTP internally?
 Internal services run in the same process. Cross-crate communication uses in-memory channels for zero-copy, zero-latency event delivery. A future split into microservices could add gRPC, but that's premature optimization.
+
+### Why change detection in the normalizer?
+Raw Moonraker pushes status updates at ~10Hz regardless of whether values changed. Without suppression, the telemetry pipeline would drown in redundant TemperatureUpdate events. The normalizer is the right place because it understands the semantics of the data.
 
 ## Scaling Considerations
 

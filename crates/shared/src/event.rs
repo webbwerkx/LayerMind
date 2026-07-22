@@ -54,6 +54,11 @@ pub enum Event {
     SpeedUpdate {
         speed: f64,
     },
+    FanUpdate {
+        name: String,
+        speed: f64,
+        rpm: Option<f64>,
+    },
 
     // --- Print Job ---
     PrintStarted {
