@@ -17,8 +17,6 @@ use layermind_shared::context::{
     ObservationSummary, PrintHistorySummary, PrinterContext, PrinterSummary, RecentFailure,
 };
 use layermind_shared::knowledge::{Knowledge, KnowledgeKind};
-use layermind_shared::observation::Severity;
-use tracing;
 
 /// How many pieces of evidence to keep in the context.
 const MAX_EVIDENCE: usize = 20;
@@ -35,6 +33,7 @@ const MAX_RECENT_FAILURES: usize = 5;
 /// read by `context()`.
 #[derive(Debug, Clone)]
 pub struct CachedContext {
+    #[allow(dead_code)]
     pub printer_id: String,
     // PrinterSummary fields
     pub name: String,
@@ -356,21 +355,8 @@ impl ContextStore {
                 _ => {}
             },
 
-            KnowledgeKind::KnowledgeSnapshot {
-                active_observation_count,
-                resolved_observation_count,
-                timeline_event_count,
-                ..
-            } => {
-                let _ = (
-                    active_observation_count,
-                    resolved_observation_count,
-                    timeline_event_count,
-                );
-            }
-
-            other => {
-                tracing::debug!(kind = ?other, "unhandled knowledge kind in context engine");
+            KnowledgeKind::KnowledgeSnapshot { .. } => {
+                // Observed but not yet used for context enrichment.
             }
         }
     }

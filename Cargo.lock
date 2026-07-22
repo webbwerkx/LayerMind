@@ -899,6 +899,7 @@ name = "layermind-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "futures-util",
  "layermind-ai",
  "layermind-analyzer",
@@ -909,6 +910,7 @@ dependencies = [
  "layermind-logging",
  "layermind-moonraker",
  "layermind-printer",
+ "layermind-reasoning",
  "layermind-shared",
  "layermind-telemetry",
  "tokio",

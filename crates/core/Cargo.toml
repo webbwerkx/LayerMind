@@ -18,7 +18,11 @@ layermind-database.workspace = true
 layermind-ai.workspace = true
 layermind-analyzer.workspace = true
 layermind-context.workspace = true
+layermind-reasoning.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 futures-util = "0.3"
 anyhow.workspace = true
+
+[dev-dependencies]
+chrono.workspace = true

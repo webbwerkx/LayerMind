@@ -30,8 +30,12 @@ impl TrustValidator {
         let mut inferences_made = 0usize;
 
         for ref_evidence in &recommendation.evidence {
-            // Search context for matching evidence.
-            let found_in_context = search_context(context, &ref_evidence.claim);
+            // Combine claim + supporting fact for keyword matching.
+            // The claim is often high-level ("Temperature is unstable")
+            // while supporting_fact carries the concrete matchable terms
+            // ("Extruder oscillating 3.2°C around target").
+            let search_text = format!("{} {}", ref_evidence.claim, ref_evidence.supporting_fact);
+            let found_in_context = search_context(context, &search_text);
 
             match found_in_context {
                 SearchResult::Observed => facts_cited += 1,

@@ -35,6 +35,16 @@ impl PrintDoctor {
         }
     }
 
+    /// Name of the AI provider (e.g. "openai", "mock").
+    pub fn provider_name(&self) -> &str {
+        self.provider.name()
+    }
+
+    /// Model identifier (e.g. "gpt-4o", "mock-gpt4").
+    pub fn provider_model(&self) -> &str {
+        self.provider.model()
+    }
+
     /// Run a full diagnostic: build prompts, call AI, parse response,
     /// validate trust, and return a validated recommendation.
     pub async fn diagnose(
@@ -110,6 +120,8 @@ impl PrintDoctor {
 
 #[derive(Debug, thiserror::Error)]
 pub enum DiagnoseError {
+    #[error("no context available for printer '{printer_id}'")]
+    MissingContext { printer_id: String },
     #[error("AI provider error: {0}")]
     ProviderError(String),
 }
