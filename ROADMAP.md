@@ -11,6 +11,9 @@
 - [x] Configuration system
 - [x] Structured logging
 - [x] Architecture documentation
+- [x] Project builds and passes checks
+- [x] Git repository initialized
+- [x] README, ARCHITECTURE, ROADMAP, CONTRIBUTING written
 
 ### Milestone 1.2 — Moonraker Integration
 - [ ] WebSocket connection with authentication
