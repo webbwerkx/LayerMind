@@ -70,9 +70,31 @@ impl Default for Config {
 }
 
 impl Config {
+    /// Load configuration from environment variables.
+    ///
+    /// Environment variables override defaults:
+    /// - `LAYERMIND_MOONRAKER_URL`
+    /// - `LAYERMIND_DATABASE_URL`
+    /// - `LAYERMIND_LOG_LEVEL`
+    ///
+    /// Future: load from XDG config file as base, env as overrides.
     pub fn load() -> layermind_shared::error::Result<Self> {
-        // TODO: Load from XDG config dir, env overrides
-        Ok(Self::default())
+        let mut config = Self::default();
+
+        if let Ok(url) = std::env::var("LAYERMIND_MOONRAKER_URL") {
+            config.moonraker.url = url;
+        }
+        if let Ok(url) = std::env::var("LAYERMIND_DATABASE_URL") {
+            config.database.url = url;
+        }
+        if let Ok(level) = std::env::var("LAYERMIND_LOG_LEVEL") {
+            config.logging.level = level;
+        }
+        if std::env::var("LAYERMIND_LOG_JSON").is_ok() {
+            config.logging.json_output = true;
+        }
+
+        Ok(config)
     }
 
     pub fn config_dir() -> std::path::PathBuf {

@@ -42,12 +42,9 @@ impl ObservationTracker {
         }
     }
 
-    /// Record a new observation. Returns knowledge records for the
-    /// tracked observation, plus any profile/timeline suggestions.
-    pub fn record(
-        &mut self,
-        observation: &Observation,
-    ) -> (Option<KnowledgeKind>, Option<KnowledgeKind>) {
+    /// Record a new observation. Returns a knowledge kind for the
+    /// tracked observation.
+    pub fn record(&mut self, observation: &Observation) -> Option<KnowledgeKind> {
         let category = category_name(&observation.kind);
         let severity = severity_name(&observation.kind);
 
@@ -78,23 +75,11 @@ impl ObservationTracker {
 
         self.entries.push(tracked);
 
-        let tracked_kind = KnowledgeKind::ObservationTracked {
+        Some(KnowledgeKind::ObservationTracked {
             observation_id: observation.id,
             importance,
             confidence,
-        };
-
-        // If this is a repeated anomaly with high importance, suggest
-        // it as a known issue for the profile.
-        let profile_kind = if matches!(observation.kind, ObservationKind::AnomalyDetected { .. })
-            && repeat_count >= 3
-        {
-            None // Profile update is handled by the profiler separately.
-        } else {
-            None
-        };
-
-        (Some(tracked_kind), profile_kind)
+        })
     }
 
     /// Resolve an observation by its ID.
@@ -199,7 +184,7 @@ mod tests {
     fn record_adds_entry() {
         let mut tracker = ObservationTracker::new();
         let obs = anomaly_obs(layermind_shared::observation::Severity::Warning);
-        let (tracked, _) = tracker.record(&obs);
+        let tracked = tracker.record(&obs);
         assert!(tracked.is_some());
         assert_eq!(tracker.entries().len(), 1);
         assert_eq!(tracker.active_count(), 1);

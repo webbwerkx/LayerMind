@@ -10,15 +10,12 @@
 //! - Events are immutable once emitted.
 //! - Storage-agnostic via the `Sink` trait.
 
-use std::sync::Arc;
-
 use layermind_config::TelemetryConfig;
 use layermind_shared::error::Result;
 use layermind_shared::event::Envelope;
 use layermind_shared::sink::Sink;
 use tokio::sync::mpsc;
 
-mod buffer;
 mod pipeline;
 pub mod sink;
 
@@ -43,7 +40,7 @@ impl TelemetryEngine {
     }
 
     /// Run the pipeline, writing events to the given sink.
-    pub async fn run(self, rx: mpsc::Receiver<Envelope>, sink: Arc<dyn Sink>) -> Result<()> {
+    pub async fn run(self, rx: mpsc::Receiver<Envelope>, sink: &dyn Sink) -> Result<()> {
         tracing::info!("telemetry engine starting");
         pipeline::run(rx, &self.config, sink).await
     }

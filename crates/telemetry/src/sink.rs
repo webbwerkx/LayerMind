@@ -1,17 +1,15 @@
-//! Telemetry sinks — destinations for processed events.
+//! Built-in telemetry sink implementations.
 //!
-//! The `Sink` trait is defined in `layermind_shared` and re-exported here.
-//! This module provides built-in sink implementations.
-//!
-//! For the production database sink, see `layermind_database::DatabaseSink`.
+//! The `Sink` trait is defined in `layermind_shared::sink`. This module
+//! provides testing/development sinks. For production storage (PostgreSQL)
+//! see `layermind_database::DatabaseSink`.
 
 use std::sync::Mutex;
 
 use async_trait::async_trait;
 use layermind_shared::error::Result;
 use layermind_shared::event::Envelope;
-
-pub use layermind_shared::sink::Sink;
+use layermind_shared::sink::Sink;
 
 /// In-memory sink for testing and development.
 pub struct MemorySink {
@@ -32,14 +30,20 @@ impl MemorySink {
     }
 
     pub fn events(&self) -> Vec<Envelope> {
-        self.events.lock().unwrap().clone()
+        self.events
+            .lock()
+            .expect("MemorySink mutex poisoned")
+            .clone()
     }
 }
 
 #[async_trait]
 impl Sink for MemorySink {
     async fn write_batch(&self, events: &[Envelope]) -> Result<()> {
-        self.events.lock().unwrap().extend_from_slice(events);
+        self.events
+            .lock()
+            .expect("MemorySink mutex poisoned")
+            .extend_from_slice(events);
         Ok(())
     }
 }

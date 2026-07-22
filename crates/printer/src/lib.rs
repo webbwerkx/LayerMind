@@ -16,7 +16,7 @@ pub mod moonraker_normalizer;
 /// A logical printer instance that normalizes raw events into canonical form.
 pub struct Printer {
     id: String,
-    _name: String,
+    name: String,
     state: PrinterState,
     normalizer_state: moonraker_normalizer::NormalizerState,
     tx: broadcast::Sender<Envelope>,
@@ -28,7 +28,7 @@ impl Printer {
         (
             Self {
                 id,
-                _name: name,
+                name,
                 state: PrinterState::Unknown,
                 normalizer_state: moonraker_normalizer::NormalizerState::new(),
                 tx,
@@ -39,6 +39,10 @@ impl Printer {
 
     pub fn id(&self) -> &str {
         &self.id
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
     }
 
     pub fn state(&self) -> PrinterState {

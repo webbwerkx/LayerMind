@@ -1,7 +1,5 @@
 //! Telemetry pipeline: buffer → enrich → route → sink.
 
-use std::sync::Arc;
-
 use layermind_config::TelemetryConfig;
 use layermind_shared::error::Result;
 use layermind_shared::event::Envelope;
@@ -11,7 +9,7 @@ use tokio::sync::mpsc;
 pub async fn run(
     mut rx: mpsc::Receiver<Envelope>,
     config: &TelemetryConfig,
-    sink: Arc<dyn Sink>,
+    sink: &dyn Sink,
 ) -> Result<()> {
     use tokio::time::{Duration, interval};
 
@@ -29,13 +27,13 @@ pub async fn run(
                 buffer.push(envelope);
 
                 if buffer.len() >= config.buffer_size {
-                    flush_batch(&buffer, &*sink).await;
+                    flush_batch(&buffer, sink).await;
                     buffer.clear();
                 }
             }
             _ = flush_timer.tick() => {
                 if !buffer.is_empty() {
-                    flush_batch(&buffer, &*sink).await;
+                    flush_batch(&buffer, sink).await;
                     buffer.clear();
                 }
             }
@@ -44,7 +42,7 @@ pub async fn run(
     }
 
     if !buffer.is_empty() {
-        flush_batch(&buffer, &*sink).await;
+        flush_batch(&buffer, sink).await;
     }
 
     sink.flush().await?;

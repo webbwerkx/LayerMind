@@ -82,7 +82,7 @@ impl KnowledgeEngine {
             });
 
         // Track the observation lifecycle.
-        let (tracked_kind, _profile_suggestion) = pk.tracker.record(&observation);
+        let tracked_kind = pk.tracker.record(&observation);
 
         // Build/update the printer profile.
         let profile_updated = pk.profiler.process(&observation);

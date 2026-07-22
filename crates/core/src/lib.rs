@@ -72,7 +72,7 @@ async fn run_pipeline(config: &Config) -> layermind_shared::error::Result<()> {
     let telemetry_task = {
         let sink = Arc::clone(&sink);
         tokio::spawn(async move {
-            if let Err(e) = telemetry.run(telemetry_rx, sink).await {
+            if let Err(e) = telemetry.run(telemetry_rx, &*sink).await {
                 tracing::error!(error = %e, "telemetry engine failed");
             }
         })
