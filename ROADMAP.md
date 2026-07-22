@@ -83,19 +83,51 @@
 - [x] Architecture docs updated
 
 ### Milestone 1.7 — Basic Dashboard
+- [ ] CLI tool for printer status
 - [ ] Live temperature display
 - [ ] Print progress monitoring
 - [ ] Event history viewer
 
 ---
 
-## Phase 2: Analysis & Intelligence
+## Phase 2: AI Reasoning
 
-**Goal: LayerMind detects problems and provides recommendations.**
+**Goal: LayerMind provides trustworthy, evidence-backed AI recommendations.**
 
-### Milestone 2.1 — Event Detection
-- [ ] Temperature instability detection
-- [ ] Print failure classification
+### Milestone 2.1 — AI Reasoning Architecture ✅
+- [x] Recommendation types in shared (Recommendation, Action, Reference, TrustAssessment)
+- [x] EvidenceQuality provenance: Observed (sensor), Inferred (rule), Confirmed (human)
+- [x] AiUsage tracking: provider, model, tokens, estimated cost
+- [x] Feedback types: Fixed, NotFixed, Incorrect, Helpful (future learning loop)
+- [x] AiProvider trait — swappable between OpenAI, OpenRouter, local models
+- [x] OpenAiProvider — covers entire /v1/chat/completions ecosystem
+- [x] MockProvider for tests — no real API key required
+- [x] PromptBuilder — PrinterContext → system + user prompts
+- [x] ResponseParser — handles valid/malformed JSON, missing fields, recovery
+- [x] TrustValidator — deterministic cross-reference of AI claims vs context evidence
+- [x] PrintDoctor — full end-to-end diagnostic pipeline
+- [x] 17 unit tests: parser ×7, prompt ×3, trust ×4, diagnostic ×2, openai ×1
+- [x] crates/ai marked deprecated
+
+### Milestone 2.2 — Wire Print Doctor into Core
+- [ ] Wire reasoning into core pipeline (accept PrinterContext from ContextEngine)
+- [ ] Write ValidatedRecommendation to database
+- [ ] Expose via API / CLI
+
+### Milestone 2.3 — Advanced Diagnostics
+- [ ] Multi-issue diagnosis (not just single cause)
+- [ ] Historical comparison: "this is similar to failure X from 3 weeks ago"
+- [ ] Confidence calibration based on user feedback
+
+### Milestone 2.4 — Local Models & Streaming
+- [ ] Local model support (llama.cpp, Ollama via same provider interface)
+- [ ] Streaming responses for long-running diagnostics
+- [ ] Temperature/config tuning per diagnostic type
+
+### Milestone 2.5 — Learning Loop
+- [ ] User feedback collection (confirm/deny recommendations)
+- [ ] Feedback → knowledge update pipeline
+- [ ] Model preference tracking per printer
 - [ ] Anomaly detection on sensor data
 - [ ] Mechanical issue detection (ringing, layer shifts)
 

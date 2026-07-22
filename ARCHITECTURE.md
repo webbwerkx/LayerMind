@@ -106,11 +106,28 @@ PostgreSQL storage backend via `sqlx`. Implements the `Sink` trait as
   telemetry for a print, printer listing
 - SQL migrations via `sqlx::migrate!()`
 
-### `ai`
-Future AI/LLM engine. Consumes Knowledge records from the Knowledge
-Engine and observations from the Analyzer to generate natural-language
-recommendations, answer questions, and learn from user feedback.
-Currently a placeholder crate.
+### `reasoning`
+AI-powered diagnostic pipeline. First capability: Print Doctor.
+
+Pipeline: PrinterContext → PromptBuilder → AiProvider → ResponseParser
+  → TrustValidator → ValidatedRecommendation
+
+- `AiProvider` trait — abstraction over OpenAI-compatible, OpenRouter,
+  local models (llama.cpp, Ollama)
+- Provider-agnostic: one trait, one implementation covers entire
+  `/v1/chat/completions` ecosystem
+- PromptBuilder — converts PrinterContext to system + user prompts
+- ResponseParser — handles valid/malformed/missing-field JSON gracefully
+- TrustValidator — deterministic cross-reference of AI claims vs context
+  evidence; never calls AI
+- AiUsage tracking — provider, model, tokens, estimated cost per request
+- Feedback types (Fixed/NotFixed/Incorrect/Helpful) for future learning
+- MockProvider for testing — no real API key needed
+
+Depends only on `shared` + `reqwest` for HTTP.
+
+### `ai` **(deprecated)**
+Replaced by `crates/reasoning` and `crates/analyzer`. Kept for history.
 
 ### `knowledge`
 Stateful layer between Analyzer and future AI Engine. Transforms

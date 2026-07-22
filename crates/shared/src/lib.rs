@@ -11,5 +11,6 @@ pub mod event;
 pub mod knowledge;
 pub mod observation;
 pub mod printer;
+pub mod recommendation;
 pub mod sink;
 pub mod types;

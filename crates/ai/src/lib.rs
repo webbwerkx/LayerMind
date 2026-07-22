@@ -1,8 +1,10 @@
-//! LayerMind AI engine.
+//! LayerMind AI engine. **DEPRECATED** — replaced by `layermind-reasoning`.
 //!
-//! Event-driven intelligence layer. Subscribes to the telemetry pipeline,
-//! detects patterns and anomalies, and generates recommendations.
+//! This crate's detection and recommendation logic has been superseded
+//! by the Analyzer (crates/analyzer) for deterministic rules and the
+//! Reasoning Engine (crates/reasoning) for AI-powered diagnostics.
 //!
+//! This crate is kept for history and will be removed in a future version.
 //! Architecture:
 //!   Telemetry → Event Detection → Interesting Event? → AI Analysis
 //!     → Recommendation → User Feedback → Learning
