@@ -107,7 +107,24 @@ PostgreSQL storage backend via `sqlx`. Implements the `Sink` trait as
 - SQL migrations via `sqlx::migrate!()`
 
 ### `ai`
-Event-driven intelligence engine. Subscribes to telemetry, runs detectors for known patterns (temperature instability, ringing, first layer failures), and generates structured recommendations. NOT a chatbot — background service producing structured output.
+Future AI/LLM engine. Consumes observations from the analyzer and
+generates natural-language recommendations, answers questions, and
+learns from user feedback. Currently a placeholder crate.
+
+### `analyzer`
+Deterministic rules engine. Consumes canonical Envelope events and
+produces structured Observations. Independent of database, telemetry,
+and Moonraker — depends only on `shared`.
+
+Components:
+- `PrintTracker` — per-printer print lifecycle (start → progress → complete/fail)
+- `HealthMetrics` — rolling health indicators (temperature stability,
+  success rate, error frequency, uptime)
+- `DetectionEngine` — runs 4 rules against event windows:
+  1. TemperatureStabilityRule — flags when avg deviation > 3°C
+  2. ErrorFrequencyRule — flags when error/warning count exceeds threshold
+  3. FailurePatternRule — flags consecutive print failures
+  4. CalibrationStalenessRule — flags when calibration is > 7 days old
 
 ### `core`
 Service orchestration. Loads config, initializes logging, wires the dependency graph, manages graceful shutdown. Entry point for the LayerMind daemon.
@@ -116,7 +133,8 @@ Wired pipeline:
 ```
 MoonrakerClient.run() → broadcast(RpcMessage)
     → Printer.run_from_moonraker() → broadcast(Envelope)
-        → bridge task → mpsc → TelemetryEngine.run()
+        ├──→ bridge task → mpsc → TelemetryEngine.run(sink) → DatabaseSink → PostgreSQL
+        └──→ AnalyzerEngine.run() → broadcast(Observation)
 ```
 
 ## Moonraker Integration Design

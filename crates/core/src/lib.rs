@@ -82,6 +82,7 @@ async fn run_pipeline(config: &Config) -> layermind_shared::error::Result<()> {
     // Forward all printer envelopes to telemetry.
     // TODO: In the future, tee to AI engine and database here.
     let mut printer_forward_rx = printer_rx;
+    let printer_tx_for_analyzer = printer.sender();
     let bridge_task = {
         let telemetry_tx = telemetry_tx.clone();
         tokio::spawn(async move {
@@ -101,6 +102,17 @@ async fn run_pipeline(config: &Config) -> layermind_shared::error::Result<()> {
             tracing::info!("printer → telemetry bridge stopped");
         })
     };
+
+    // ── Analyzer engine ─────────────────────────────────────────
+    let analyzer_rx = printer_tx_for_analyzer.subscribe();
+    let (analyzer, _analyzer_obs_rx) = layermind_analyzer::AnalyzerEngine::new(analyzer_rx);
+    let analyzer_task = {
+        tokio::spawn(async move {
+            analyzer.run().await;
+        })
+    };
+
+    tracing::info!("analyzer engine started");
 
     // ── Wire printer → Moonraker normalizer ──────────────────────
     let printer_task = {
@@ -133,7 +145,13 @@ async fn run_pipeline(config: &Config) -> layermind_shared::error::Result<()> {
     // Wait for tasks with a timeout.
     let _ = tokio::time::timeout(
         std::time::Duration::from_secs(10),
-        futures_util::future::join_all([moonraker_task, printer_task, bridge_task, telemetry_task]),
+        futures_util::future::join_all([
+            moonraker_task,
+            printer_task,
+            bridge_task,
+            telemetry_task,
+            analyzer_task,
+        ]),
     )
     .await;
 

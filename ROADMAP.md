@@ -43,7 +43,21 @@
 - [x] Database design docs + future scaling strategy in ARCHITECTURE.md
 - [x] Live pipeline: Moonraker → Printer → Telemetry → DatabaseSink
 
-### Milestone 1.4 — Basic Dashboard
+### Milestone 1.4 — Analyzer Engine ✅
+- [x] Deterministic rules engine (crates/analyzer) — no AI/LLM dependency
+- [x] PrintTracker: per-printer print lifecycle tracking (start→progress→complete/fail)
+- [x] HealthMetrics: temperature stability, success rate, error frequency, uptime
+- [x] TemperatureStabilityRule — flags when avg deviation > 3°C
+- [x] ErrorFrequencyRule — flags when error/warning count exceeds thresholds
+- [x] FailurePatternRule — flags consecutive print failures (2=warning, 5=critical)
+- [x] CalibrationStalenessRule — flags when calibration > 7 days old
+- [x] Observation type in shared crate (PrintLifecycle, PrintSummary, HealthSnapshot, AnomalyDetected)
+- [x] AnalyzerEngine consumes printer broadcast, produces Observation broadcast
+- [x] Wired into core pipeline (5 tasks: moonraker, printer, bridge, telemetry, analyzer)
+- [x] 17 unit tests: metrics, print tracker, all 4 rules (edge cases included)
+- [x] Architecture docs updated
+
+### Milestone 1.5 — Basic Dashboard
 - [ ] CLI tool for printer status
 - [ ] Live temperature display
 - [ ] Print progress monitoring

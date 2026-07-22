@@ -8,6 +8,7 @@ members = [
     "crates/telemetry",
     "crates/database",
     "crates/ai",
+    "crates/analyzer",
     "crates/core",
 ]
 resolver = "2"
@@ -41,6 +42,7 @@ layermind-printer = { path = "crates/printer" }
 layermind-telemetry = { path = "crates/telemetry" }
 layermind-database = { path = "crates/database" }
 layermind-ai = { path = "crates/ai" }
+layermind-analyzer = { path = "crates/analyzer" }
 layermind-core = { path = "crates/core" }
 
 [profile.release]
