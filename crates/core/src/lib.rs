@@ -127,7 +127,11 @@ async fn run_pipeline(config: &Config) -> layermind_shared::error::Result<()> {
 
     // ── Context engine ─────────────────────────────────────────
     let context_rx = knowledge_rx.resubscribe();
-    let context_engine = layermind_context::ContextEngine::new(context_rx);
+    // Held for Phase 2.2 — PrintDoctor queries this store.
+    #[allow(unused)]
+    let context_store = Arc::new(layermind_context::ContextStore::new());
+    let context_engine =
+        layermind_context::ContextEngine::new(context_rx, Arc::clone(&context_store));
     let context_task = {
         tokio::spawn(async move {
             context_engine.run().await;
