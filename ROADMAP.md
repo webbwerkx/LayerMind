@@ -57,7 +57,19 @@
 - [x] 17 unit tests: metrics, print tracker, all 4 rules (edge cases included)
 - [x] Architecture docs updated
 
-### Milestone 1.5 — Basic Dashboard
+### Milestone 1.5 — Knowledge Engine ✅
+- [x] Knowledge types in shared crate (Knowledge, KnowledgeKind, PrinterProfile, TimelineEntry)
+- [x] ObservationTracker — lifecycle management (active → acknowledged → resolved)
+- [x] PrinterProfiler — aggregating per-printer profiles (hardware, behavior, known issues)
+- [x] TimelineBuilder — chronological printer event history with milestones
+- [x] KnowledgeScorer — importance (severity × repeat penalty) and confidence (evidence-based)
+- [x] KnowledgeEngine subscribes to analyzer broadcast, produces Knowledge broadcast
+- [x] Database migration 002: knowledge_observations, printer_profiles, printer_timeline
+- [x] Wired into core pipeline (6 tasks: moonraker, printer, bridge, telemetry, analyzer, knowledge)
+- [x] 18 unit tests: scoring ×4, tracker ×4, profiler ×5, timeline ×5
+- [x] Architecture docs updated
+
+### Milestone 1.6 — Basic Dashboard
 - [ ] CLI tool for printer status
 - [ ] Live temperature display
 - [ ] Print progress monitoring

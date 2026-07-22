@@ -107,9 +107,22 @@ PostgreSQL storage backend via `sqlx`. Implements the `Sink` trait as
 - SQL migrations via `sqlx::migrate!()`
 
 ### `ai`
-Future AI/LLM engine. Consumes observations from the analyzer and
-generates natural-language recommendations, answers questions, and
-learns from user feedback. Currently a placeholder crate.
+Future AI/LLM engine. Consumes Knowledge records from the Knowledge
+Engine and observations from the Analyzer to generate natural-language
+recommendations, answer questions, and learn from user feedback.
+Currently a placeholder crate.
+
+### `knowledge`
+Stateful layer between Analyzer and future AI Engine. Transforms
+observations into persistent, structured knowledge about printers.
+
+- ObservationTracker — lifecycle management (active → acknowledged → resolved)
+- PrinterProfiler — aggregating hardware, behavior, known issues, reliability
+- TimelineBuilder — chronological history of important events
+- KnowledgeScorer — importance (severity × repeat count) and confidence
+
+Depends only on `shared`. Persistence via KnowledgeSink in database crate.
+New tables: knowledge_observations, printer_profiles, printer_timeline.
 
 ### `analyzer`
 Deterministic rules engine. Consumes canonical Envelope events and
@@ -135,6 +148,7 @@ MoonrakerClient.run() → broadcast(RpcMessage)
     → Printer.run_from_moonraker() → broadcast(Envelope)
         ├──→ bridge task → mpsc → TelemetryEngine.run(sink) → DatabaseSink → PostgreSQL
         └──→ AnalyzerEngine.run() → broadcast(Observation)
+                └──→ KnowledgeEngine.run() → broadcast(Knowledge)
 ```
 
 ## Moonraker Integration Design

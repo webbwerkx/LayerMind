@@ -7,6 +7,7 @@
 
 pub mod error;
 pub mod event;
+pub mod knowledge;
 pub mod observation;
 pub mod printer;
 pub mod sink;

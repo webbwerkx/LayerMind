@@ -68,3 +68,47 @@ pub struct AiObservation {
     pub confidence: Option<f64>,
     pub created_at: DateTime<Utc>,
 }
+
+// ── Knowledge Observation ───────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct KnowledgeObservation {
+    pub id: Uuid,
+    pub printer_id: String,
+    pub observation_id: Uuid,
+    pub category: String,
+    pub severity: String,
+    pub importance: f64,
+    pub confidence: f64,
+    pub status: String,
+    pub resolution: Option<String>,
+    pub resolved_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+// ── Printer Profile ─────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct PrinterProfileRow {
+    pub printer_id: String,
+    pub hardware: serde_json::Value,
+    pub behavior: serde_json::Value,
+    pub reliability_score: Option<f64>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+// ── Timeline Event ──────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct TimelineEventRow {
+    pub id: Uuid,
+    pub printer_id: String,
+    pub event_type: String,
+    pub description: String,
+    pub severity: Option<String>,
+    pub metadata: serde_json::Value,
+    pub occurred_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+}

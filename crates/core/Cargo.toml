@@ -10,6 +10,7 @@ rust-version.workspace = true
 layermind-shared.workspace = true
 layermind-config.workspace = true
 layermind-logging.workspace = true
+layermind-knowledge.workspace = true
 layermind-moonraker.workspace = true
 layermind-printer.workspace = true
 layermind-telemetry.workspace = true
