@@ -1,0 +1,20 @@
+[package]
+name = "layermind-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+layermind-shared.workspace = true
+layermind-config.workspace = true
+layermind-logging.workspace = true
+layermind-moonraker.workspace = true
+layermind-printer.workspace = true
+layermind-telemetry.workspace = true
+layermind-database.workspace = true
+layermind-ai.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+anyhow.workspace = true

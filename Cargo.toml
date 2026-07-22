@@ -1,0 +1,47 @@
+[workspace]
+members = [
+    "crates/shared",
+    "crates/config",
+    "crates/logging",
+    "crates/moonraker",
+    "crates/printer",
+    "crates/telemetry",
+    "crates/database",
+    "crates/ai",
+    "crates/core",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "UNLICENSED"
+repository = "https://github.com/layermind/layermind"
+rust-version = "1.95"
+
+[workspace.dependencies]
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "v7", "serde"] }
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+anyhow = "1"
+
+# LayerMind internal crates
+layermind-shared = { path = "crates/shared" }
+layermind-config = { path = "crates/config" }
+layermind-logging = { path = "crates/logging" }
+layermind-moonraker = { path = "crates/moonraker" }
+layermind-printer = { path = "crates/printer" }
+layermind-telemetry = { path = "crates/telemetry" }
+layermind-database = { path = "crates/database" }
+layermind-ai = { path = "crates/ai" }
+layermind-core = { path = "crates/core" }
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3

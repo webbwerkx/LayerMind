@@ -1,0 +1,36 @@
+# Rust
+target/
+*.rs.bk
+*.rlib
+*.profraw
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Build artifacts
+dist/
+build/
+node_modules/
+
+# Docker
+docker-compose.override.yml
