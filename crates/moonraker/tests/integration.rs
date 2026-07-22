@@ -158,9 +158,7 @@ async fn client_connects_and_receives_messages() {
     let (client_shutdown_tx, client_shutdown_rx) = watch::channel(());
 
     // Run client in background.
-    let client_handle = tokio::spawn(async move {
-        client.run(client_shutdown_rx).await
-    });
+    let client_handle = tokio::spawn(async move { client.run(client_shutdown_rx).await });
 
     // Collect messages for a brief period.
     let mut messages = Vec::new();
@@ -215,9 +213,7 @@ async fn client_handles_reconnection() {
     let (client, _rx) = MoonrakerClient::new(config);
     let (client_shutdown_tx, client_shutdown_rx) = watch::channel(());
 
-    let client_handle = tokio::spawn(async move {
-        client.run(client_shutdown_rx).await
-    });
+    let client_handle = tokio::spawn(async move { client.run(client_shutdown_rx).await });
 
     // Let the client connect.
     tokio::time::sleep(Duration::from_millis(200)).await;
@@ -230,7 +226,10 @@ async fn client_handles_reconnection() {
     tokio::time::sleep(Duration::from_millis(500)).await;
 
     // The client should still be running (trying to reconnect).
-    assert!(!client_handle.is_finished(), "client should still be running during reconnect");
+    assert!(
+        !client_handle.is_finished(),
+        "client should still be running during reconnect"
+    );
 
     // Shutdown the client.
     let _ = client_shutdown_tx.send(());
@@ -252,9 +251,7 @@ async fn client_shuts_down_on_signal() {
     let (client, _rx) = MoonrakerClient::new(config);
     let (client_shutdown_tx, client_shutdown_rx) = watch::channel(());
 
-    let client_handle = tokio::spawn(async move {
-        client.run(client_shutdown_rx).await
-    });
+    let client_handle = tokio::spawn(async move { client.run(client_shutdown_rx).await });
 
     // Let it connect.
     tokio::time::sleep(Duration::from_millis(200)).await;
