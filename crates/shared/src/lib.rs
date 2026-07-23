@@ -8,6 +8,7 @@
 pub mod context;
 pub mod error;
 pub mod event;
+pub mod history;
 pub mod knowledge;
 pub mod machine;
 pub mod observation;

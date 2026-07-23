@@ -157,6 +157,7 @@ mod tests {
                 typical_severity: "warning".into(),
                 resolved_count: 0,
             }],
+            history: layermind_shared::history::HistorySummary::default(),
             machine: None,
             recent_evidence: Vec::new(),
         }

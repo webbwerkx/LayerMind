@@ -208,6 +208,7 @@ mod tests {
                 importance: 0.6,
             }],
             historical_patterns: Vec::new(),
+            history: layermind_shared::history::HistorySummary::default(),
             machine: None,
             recent_evidence: vec![Evidence::observed(
                 "temperature_reading",

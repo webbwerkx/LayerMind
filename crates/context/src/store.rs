@@ -16,6 +16,7 @@ use layermind_shared::context::{
     CurrentState, Evidence, EvidenceQuality, HealthSummary, HistoricalPattern, IssueSummary,
     ObservationSummary, PrintHistorySummary, PrinterContext, PrinterSummary, RecentFailure,
 };
+use layermind_shared::history::{HistorySummary, RecentChange, TimelineCategory};
 use layermind_shared::knowledge::{Knowledge, KnowledgeKind};
 use layermind_shared::machine::MachineProfile;
 
@@ -69,6 +70,14 @@ pub struct CachedContext {
     pub evidence: Vec<Evidence>,
     /// Machine intelligence profile — hardware, capabilities, confidence.
     pub machine: Option<MachineProfile>,
+    // History summary
+    pub last_hardware_change: Option<chrono::DateTime<chrono::Utc>>,
+    pub last_firmware_update: Option<chrono::DateTime<chrono::Utc>>,
+    pub last_config_change: Option<chrono::DateTime<chrono::Utc>>,
+    pub last_calibration: Option<chrono::DateTime<chrono::Utc>>,
+    pub last_maintenance: Option<chrono::DateTime<chrono::Utc>>,
+    pub recent_changes: Vec<RecentChange>,
+    pub total_events: u64,
 }
 
 impl CachedContext {
@@ -100,6 +109,13 @@ impl CachedContext {
             patterns: Vec::new(),
             evidence: Vec::new(),
             machine: None,
+            last_hardware_change: None,
+            last_firmware_update: None,
+            last_config_change: None,
+            last_calibration: None,
+            last_maintenance: None,
+            recent_changes: Vec::new(),
+            total_events: 0,
         }
     }
 }
@@ -120,6 +136,53 @@ impl ContextStore {
         Self {
             contexts: RwLock::new(HashMap::new()),
         }
+    }
+
+    /// Record a timeline event into the cached context history summary.
+    pub fn record_timeline_event(
+        &self,
+        printer_id: &str,
+        change: RecentChange,
+        category: &layermind_shared::history::TimelineCategory,
+    ) {
+        let mut contexts = self.contexts.write().expect("ContextStore RwLock poisoned");
+        let cached = contexts
+            .entry(printer_id.into())
+            .or_insert_with(|| CachedContext::new(printer_id.into()));
+        cached.total_events += 1;
+        cached.recent_changes.push(change);
+
+        // Keep only last 20 recent changes.
+        if cached.recent_changes.len() > 20 {
+            cached.recent_changes.remove(0);
+        }
+
+        // Update category-specific timestamps.
+        let now = Utc::now();
+        match category {
+            TimelineCategory::Hardware => cached.last_hardware_change = Some(now),
+            TimelineCategory::Firmware => cached.last_firmware_update = Some(now),
+            TimelineCategory::Configuration => cached.last_config_change = Some(now),
+            _ => {}
+        }
+    }
+
+    /// Record a calibration event timestamp.
+    pub fn record_calibration(&self, printer_id: &str) {
+        let mut contexts = self.contexts.write().expect("ContextStore RwLock poisoned");
+        let cached = contexts
+            .entry(printer_id.into())
+            .or_insert_with(|| CachedContext::new(printer_id.into()));
+        cached.last_calibration = Some(Utc::now());
+    }
+
+    /// Record a maintenance event timestamp.
+    pub fn record_maintenance(&self, printer_id: &str) {
+        let mut contexts = self.contexts.write().expect("ContextStore RwLock poisoned");
+        let cached = contexts
+            .entry(printer_id.into())
+            .or_insert_with(|| CachedContext::new(printer_id.into()));
+        cached.last_maintenance = Some(Utc::now());
     }
 
     /// Inject machine intelligence data into a printer's context.
@@ -200,6 +263,17 @@ impl ContextStore {
                 .cloned()
                 .collect(),
             machine: cached.machine.clone(),
+            history: HistorySummary {
+                last_hardware_change: cached.last_hardware_change,
+                last_firmware_update: cached.last_firmware_update,
+                last_config_change: cached.last_config_change,
+                last_calibration: cached.last_calibration,
+                last_maintenance: cached.last_maintenance,
+                recent_changes: cached.recent_changes.clone(),
+                total_events: cached.total_events,
+                config_age_days: None,
+                hardware_age_days: None,
+            },
         })
     }
 

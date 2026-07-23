@@ -11,6 +11,7 @@ members = [
     "crates/analyzer",
     "crates/knowledge",
     "crates/context",
+    "crates/history",
     "crates/machine",
     "crates/reasoning",
     "crates/core",
@@ -51,6 +52,7 @@ layermind-knowledge = { path = "crates/knowledge" }
 layermind-context = { path = "crates/context" }
 layermind-reasoning = { path = "crates/reasoning" }
 layermind-machine = { path = "crates/machine" }
+layermind-history = { path = "crates/history" }
 layermind-core = { path = "crates/core" }
 
 [profile.release]

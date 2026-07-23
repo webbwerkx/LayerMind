@@ -939,6 +939,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "layermind-history"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "layermind-shared",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "layermind-knowledge"
 version = "0.1.0"
 dependencies = [

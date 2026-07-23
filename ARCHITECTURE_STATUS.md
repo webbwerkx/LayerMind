@@ -1,9 +1,9 @@
 # LayerMind — Architecture & Status
 
 > Auto-generated reference document. Last updated: 2025-07-21.
-> Reflects the state of the project after Phase 2.6 freeze.
+> Reflects the state of the project after Phase 3.0 freeze.
 >
-> **Phase 2 Foundation Complete. Ready for Phase 3: Learning Engine.**
+> **Phase 3.0: Historical Timeline — Foundation Complete.**
 
 ---
 
@@ -38,6 +38,8 @@ crates/
 ├── reasoning/       AI diagnostic pipeline. PrintDoctor, 9 deterministic stages, provider-agnostic.
 ├── machine/         Machine intelligence — hardware discovery, capability derivation,
 │                    confidence model, hardware library. Pure deterministic logic.
+├── history/         Historical timeline — immutable events, snapshots, diffs,
+│                    strongly-typed queries, statistics. Append-only, no AI.
 ├── ai/              Provider implementations. OpenAiCompatible, Anthropic, Gemini. Retry wrapper.
 └── core/            Orchestration. Wires all tasks, manages lifecycle, exposes diagnose_printer().
 ```
@@ -80,8 +82,9 @@ No cycles. `reasoning` has zero HTTP/networking dependencies. `ai` owns all prov
 | 2.5 Diagnostic Strategies | ✅ | 45 | Rapid/Standard/Thorough presets, DiagnosticOrchestrator, strategy flows through pipeline |
 | 2.5.1 Foundation Freeze | ✅ | 141 | Provider tests, config tests, retry tests, streaming tests, doc fix |
 | 2.6 Machine Intelligence | ✅ | 163 | MachineProfile, CapabilityEngine, confidence model, hardware library, context integration |
+| 3.0 Historical Timeline | ✅ | 180 | TimelineStore, QueryEngine, SnapshotBuilder, DiffEngine, HistorySummary, context integration |
 
-### Phase 3 — Learning & Optimization (Future)
+### Phase 3.1+ — Learning (Future)
 
 | Milestone | Status |
 |-----------|--------|
@@ -208,8 +211,9 @@ DiagnosticOrchestrator  ─── selects strategy → PrintDoctor::with_strateg
 | reasoning | 45 | Parser, prompt, trust, diagnostic, evidence, confidence, prioritization, contradiction, strategy |
 | ai | 16 | Provider factory, retry, streaming trait, all-6-providers test |
 | config | 4 | ProviderConfig defaults, serialization, compatibility |
+| history | 17 | Store, query engine, snapshot builder, diff engine, stats |
 | machine | 22 | Discovery, capability derivation, confidence, library, builder |
-| **Total** | **163** | |
+| **Total** | **180** | |
 
 ---
 
