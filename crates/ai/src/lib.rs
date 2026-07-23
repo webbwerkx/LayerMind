@@ -69,11 +69,10 @@ pub fn create_provider(
                 .endpoint
                 .clone()
                 .unwrap_or_else(|| "https://api.openai.com".into());
-            Ok(Arc::new(providers::OpenAiCompatibleProvider::new(
-                &endpoint,
-                &key,
-                &config.model,
-            )))
+            Ok(Arc::new(
+                providers::OpenAiCompatibleProvider::new(&endpoint, &key, &config.model)
+                    .with_name("openai"),
+            ))
         }
         "openrouter" => {
             let key = resolve_key(config, "OPENROUTER_API_KEY")?;
@@ -81,23 +80,20 @@ pub fn create_provider(
                 .endpoint
                 .clone()
                 .unwrap_or_else(|| "https://openrouter.ai/api".into());
-            Ok(Arc::new(providers::OpenAiCompatibleProvider::new(
-                &endpoint,
-                &key,
-                &config.model,
-            )))
+            Ok(Arc::new(
+                providers::OpenAiCompatibleProvider::new(&endpoint, &key, &config.model)
+                    .with_name("openrouter"),
+            ))
         }
         "ollama" => {
             let endpoint = config
                 .endpoint
                 .clone()
                 .unwrap_or_else(|| "http://localhost:11434".into());
-            // Ollama doesn't require auth by default.
-            Ok(Arc::new(providers::OpenAiCompatibleProvider::new(
-                &endpoint,
-                "",
-                &config.model,
-            )))
+            Ok(Arc::new(
+                providers::OpenAiCompatibleProvider::new(&endpoint, "", &config.model)
+                    .with_name("ollama"),
+            ))
         }
         "custom" => {
             let endpoint = config.endpoint.as_deref().ok_or_else(|| {
@@ -106,11 +102,10 @@ pub fn create_provider(
                 )
             })?;
             let key = config.api_key.clone().unwrap_or_default();
-            Ok(Arc::new(providers::OpenAiCompatibleProvider::new(
-                endpoint,
-                &key,
-                &config.model,
-            )))
+            Ok(Arc::new(
+                providers::OpenAiCompatibleProvider::new(endpoint, &key, &config.model)
+                    .with_name("custom"),
+            ))
         }
         "anthropic" => {
             let key = resolve_key(config, "ANTHROPIC_API_KEY")?;

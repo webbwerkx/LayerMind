@@ -136,6 +136,15 @@ impl Config {
         if std::env::var("LAYERMIND_LOG_JSON").is_ok() {
             config.logging.json_output = true;
         }
+        if let Ok(provider) = std::env::var("LAYERMIND_PROVIDER") {
+            config.provider.provider = provider;
+        }
+        if let Ok(model) = std::env::var("LAYERMIND_MODEL") {
+            config.provider.model = model;
+        }
+        if let Ok(endpoint) = std::env::var("LAYERMIND_PROVIDER_ENDPOINT") {
+            config.provider.endpoint = Some(endpoint);
+        }
 
         Ok(config)
     }
