@@ -200,7 +200,8 @@ pub struct FailureCluster {
     pub count: u64,
     pub first_occurrence: DateTime<Utc>,
     pub last_occurrence: DateTime<Utc>,
-    pub is_active: bool, // still happening recently
+    /// True if failures are still occurring in recent history.
+    pub is_active: bool,
 }
 
 // ── Configuration Drift ─────────────────────────────────────────────

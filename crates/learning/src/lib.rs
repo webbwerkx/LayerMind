@@ -22,9 +22,7 @@ pub mod prints;
 pub mod trends;
 
 use chrono::Utc;
-use layermind_shared::history::{
-    AnomalyEvent, AnomalySeverity, TimelineCategory, TimelineEvent, TimelineEventKind,
-};
+use layermind_shared::history::{TimelineCategory, TimelineEvent, TimelineEventKind};
 use layermind_shared::learning::*;
 
 /// Top-level learning engine — orchestrates all sub-analyzers and
@@ -35,7 +33,7 @@ pub struct LearningEngine;
 impl LearningEngine {
     /// Analyze a slice of timeline events and produce a complete
     /// behavior summary.
-    pub fn analyze(events: &[TimelineEvent], printer_id: &str) -> BehaviorSummary {
+    pub fn analyze(events: &[TimelineEvent]) -> BehaviorSummary {
         let patterns = patterns::PatternDetector::detect(events);
         let trends = trends::TrendAnalyzer::analyze(events);
         let print_comparison = prints::PrintAnalyzer::compare_recent(events);
@@ -57,23 +55,6 @@ impl LearningEngine {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────
-
-pub(crate) fn category_count(events: &[TimelineEvent], cat: TimelineCategory) -> usize {
-    events
-        .iter()
-        .filter(|e| TimelineCategory::from(&e.kind) == cat)
-        .count()
-}
-
-pub(crate) fn iter_of_kind<T, F>(events: &[TimelineEvent], f: F) -> Vec<(&TimelineEvent, &T)>
-where
-    F: Fn(&TimelineEventKind) -> Option<&T>,
-{
-    events
-        .iter()
-        .filter_map(|e| f(&e.kind).map(|t| (e, t)))
-        .collect()
-}
 
 #[cfg(test)]
 mod tests {
@@ -99,7 +80,7 @@ mod tests {
 
     #[test]
     fn empty_events_produces_empty_summary() {
-        let summary = LearningEngine::analyze(&[], "p1");
+        let summary = LearningEngine::analyze(&[]);
         assert_eq!(summary.events_analyzed, 0);
         assert!(summary.patterns.is_empty());
         assert!(summary.trends.is_empty());
@@ -110,7 +91,7 @@ mod tests {
         let events: Vec<_> = (0..5)
             .map(|_| anomaly("thermal warning", AnomalySeverity::Warning))
             .collect();
-        let summary = LearningEngine::analyze(&events, "p1");
+        let summary = LearningEngine::analyze(&events);
         assert!(summary.patterns_found > 0);
     }
 }

@@ -9,7 +9,6 @@
 //! All computation is mechanical. Trends are computed from counts over
 //! sliding windows, with simple linear regression for direction.
 
-use chrono::Duration;
 use layermind_shared::history::*;
 use layermind_shared::learning::*;
 
@@ -54,11 +53,8 @@ impl TrendAnalyzer {
         let first_half = &failures[..mid];
         let second_half = &failures[mid..];
 
-        let first_half_refs: Vec<TimelineEvent> = first_half.iter().map(|e| (*e).clone()).collect();
-        let second_half_refs: Vec<TimelineEvent> =
-            second_half.iter().map(|e| (*e).clone()).collect();
-        let first_span = duration_days(&first_half_refs);
-        let second_span = duration_days(&second_half_refs);
+        let first_span = span_hours(first_half);
+        let second_span = span_hours(second_half);
 
         let first_rate = if first_span > 0.0 {
             first_half.len() as f64 / first_span
@@ -224,6 +220,18 @@ fn duration_days(events: &[TimelineEvent]) -> f64 {
         (Some(f), Some(l)) => {
             let dur = l - f;
             dur.num_milliseconds() as f64 / (24.0 * 3600.0 * 1000.0)
+        }
+        _ => 0.0,
+    }
+}
+
+fn span_hours(events: &[&TimelineEvent]) -> f64 {
+    let first = events.iter().map(|e| e.timestamp).min();
+    let last = events.iter().map(|e| e.timestamp).max();
+    match (first, last) {
+        (Some(f), Some(l)) => {
+            let dur = l - f;
+            dur.num_milliseconds() as f64 / (3600.0 * 1000.0)
         }
         _ => 0.0,
     }
