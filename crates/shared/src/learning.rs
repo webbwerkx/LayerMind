@@ -181,6 +181,8 @@ pub struct BehaviorSummary {
     pub calibration: Option<CalibrationSummary>,
     /// Component aging estimates.
     pub aging: Vec<AgingReport>,
+    /// Per-component health assessments from the prediction engine.
+    pub component_health: Vec<ComponentHealth>,
     /// When this summary was generated.
     pub generated_at: DateTime<Utc>,
     /// Total timeline events analyzed.
@@ -228,6 +230,47 @@ pub struct SuccessWindow {
     pub most_common_failure: Option<String>,
 }
 
+// ── Component Health ────────────────────────────────────────────────
+
+/// Health assessment for a single component, derived from historical
+/// patterns and trend analysis. Used by the Failure Prediction engine.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComponentHealth {
+    /// Component identifier (matches the ID used in timeline events).
+    pub component_id: String,
+    /// Human-readable component type ("probe", "hotend", "extruder", etc.).
+    pub component_type: String,
+    /// Overall health score. 1.0 = healthy, 0.0 = imminent failure.
+    pub health_score: f64,
+    /// Active warnings for this component.
+    pub warnings: Vec<ComponentWarning>,
+    /// Rate of health decline per day. Positive = getting worse.
+    pub degradation_rate: f64,
+    /// Number of anomalies attributed to this component.
+    pub anomaly_count: u64,
+    /// When the health was last assessed.
+    pub assessed_at: DateTime<Utc>,
+}
+
+/// A specific warning about a component.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComponentWarning {
+    pub severity: WarningSeverity,
+    pub message: String,
+    pub detected_at: DateTime<Utc>,
+    pub evidence: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WarningSeverity {
+    /// Minor degradation detected — monitor.
+    Early,
+    /// Significant degradation — plan maintenance soon.
+    Moderate,
+    /// Component is likely to fail soon — action recommended.
+    Critical,
+}
+
 impl BehaviorSummary {
     /// Create a new empty summary with just the generation timestamp.
     pub fn new(events_analyzed: u64) -> Self {
@@ -236,5 +279,13 @@ impl BehaviorSummary {
             generated_at: Utc::now(),
             ..Default::default()
         }
+    }
+
+    /// Components currently in warning or critical state.
+    pub fn unhealthy_components(&self) -> Vec<&ComponentHealth> {
+        self.component_health
+            .iter()
+            .filter(|ch| ch.health_score < 0.7)
+            .collect()
     }
 }

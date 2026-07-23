@@ -18,11 +18,12 @@
 
 pub mod calibration;
 pub mod patterns;
+pub mod prediction;
 pub mod prints;
 pub mod trends;
 
 use chrono::Utc;
-use layermind_shared::history::{TimelineCategory, TimelineEvent, TimelineEventKind};
+use layermind_shared::history::TimelineEvent;
 use layermind_shared::learning::*;
 
 /// Top-level learning engine — orchestrates all sub-analyzers and
@@ -41,12 +42,28 @@ impl LearningEngine {
 
         let patterns_found = patterns.len() as u64;
 
+        // Build partial summary for the prediction engine to consume.
+        let partial = BehaviorSummary {
+            patterns: patterns.clone(),
+            trends: trends.clone(),
+            print_comparison: print_comparison.clone(),
+            calibration: calibration.clone(),
+            generated_at: Utc::now(),
+            events_analyzed: events.len() as u64,
+            patterns_found,
+            ..BehaviorSummary::default()
+        };
+
+        let aging = prediction::FailurePredictor::predict(events, &partial);
+        let component_health = prediction::FailurePredictor::component_health(events, &partial);
+
         BehaviorSummary {
             patterns,
             trends,
             print_comparison,
             calibration,
-            aging: Vec::new(), // Phase 3.2
+            aging,
+            component_health,
             generated_at: Utc::now(),
             events_analyzed: events.len() as u64,
             patterns_found,
