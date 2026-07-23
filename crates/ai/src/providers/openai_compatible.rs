@@ -13,12 +13,12 @@ use layermind_reasoning::provider::{AiError, AiProvider, AiRequest, AiResponse, 
 /// A provider for any OpenAI-compatible `/v1/chat/completions` endpoint.
 ///
 /// Configurable via base URL, API key, and model name. Works with:
-///   - OpenAI: base = "https://api.openai.com"
-///   - OpenRouter: base = "https://openrouter.ai/api"
-///   - Ollama: base = "http://localhost:11434"
-///   - LM Studio: base = "http://localhost:1234"
-///   - vLLM: base = "http://localhost:8000"
-///   - LocalAI: base = "http://localhost:8080"
+///   - OpenAI: base = `<https://api.openai.com>`
+///   - OpenRouter: base = `<https://openrouter.ai/api>`
+///   - Ollama: base = `<http://localhost:11434>`
+///   - LM Studio: base = `<http://localhost:1234>`
+///   - vLLM: base = `<http://localhost:8000>`
+///   - LocalAI: base = `<http://localhost:8080>`
 #[derive(Debug)]
 pub struct OpenAiCompatibleProvider {
     name: String,

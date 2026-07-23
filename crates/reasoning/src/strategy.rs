@@ -142,4 +142,67 @@ mod tests {
         let s = DiagnosticStrategy::RAPID;
         let _s2 = s.clone();
     }
+
+    #[test]
+    fn rapid_has_smallest_limits() {
+        let r = DiagnosticStrategy::RAPID;
+        let s = DiagnosticStrategy::STANDARD;
+        let t = DiagnosticStrategy::THOROUGH;
+        assert!(r.max_evidence < s.max_evidence);
+        assert!(r.max_issues < s.max_issues);
+        assert!(r.max_tokens < s.max_tokens);
+        assert!(t.max_evidence > s.max_evidence);
+        assert!(t.max_tokens > s.max_tokens);
+    }
+
+    #[test]
+    fn rapid_excludes_contradictions_and_trends() {
+        let r = DiagnosticStrategy::RAPID;
+        assert!(!r.include_contradictions);
+        assert!(!r.include_historical_trends);
+    }
+
+    #[test]
+    fn standard_and_thorough_include_contradictions() {
+        assert!(DiagnosticStrategy::STANDARD.include_contradictions);
+        assert!(DiagnosticStrategy::THOROUGH.include_contradictions);
+    }
+
+    #[test]
+    fn thorough_has_lowest_temperature() {
+        assert!(
+            DiagnosticStrategy::THOROUGH.temperature < DiagnosticStrategy::STANDARD.temperature
+        );
+        assert!(DiagnosticStrategy::THOROUGH.temperature < DiagnosticStrategy::RAPID.temperature);
+    }
+
+    #[test]
+    fn rapid_is_abbreviated_verbosity() {
+        assert_eq!(
+            DiagnosticStrategy::RAPID.prompt_verbosity,
+            PromptVerbosity::Abbreviated
+        );
+        assert_eq!(
+            DiagnosticStrategy::STANDARD.prompt_verbosity,
+            PromptVerbosity::Standard
+        );
+        assert_eq!(
+            DiagnosticStrategy::THOROUGH.prompt_verbosity,
+            PromptVerbosity::Detailed
+        );
+    }
+
+    #[test]
+    fn custom_strategy_overrides_work() {
+        let custom = DiagnosticStrategy {
+            max_evidence: 7,
+            max_tokens: 777,
+            ..DiagnosticStrategy::STANDARD
+        };
+        assert_eq!(custom.max_evidence, 7);
+        assert_eq!(custom.max_tokens, 777);
+        // Inherited fields unchanged.
+        assert_eq!(custom.max_issues, DiagnosticStrategy::STANDARD.max_issues);
+        assert_eq!(custom.include_contradictions, true);
+    }
 }

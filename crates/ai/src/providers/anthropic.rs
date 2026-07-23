@@ -79,9 +79,12 @@ impl AiProvider for AnthropicProvider {
         let content = msg_resp
             .content
             .into_iter()
-            .filter_map(|block| match block {
-                ContentBlock::Text { text } => Some(text),
-                _ => None,
+            .filter_map(|block| {
+                #[allow(unreachable_patterns)]
+                match block {
+                    ContentBlock::Text { text } => Some(text),
+                    _ => None,
+                }
             })
             .collect::<Vec<_>>()
             .join("\n");

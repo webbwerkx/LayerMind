@@ -52,8 +52,8 @@ pub struct ProviderConfig {
     #[serde(default = "default_provider")]
     pub provider: String,
     /// API endpoint base URL. When set, overrides the provider default.
-    /// Examples: "https://api.openai.com", "http://localhost:11434",
-    /// "https://openrouter.ai/api".
+    /// Examples: `<https://api.openai.com>`, `<http://localhost:11434>`,
+    /// `<https://openrouter.ai/api>`.
     #[serde(default)]
     pub endpoint: Option<String>,
     /// Model name: "gpt-4o", "claude-opus-4-20250514", "gemini-2.5-pro",
@@ -153,5 +153,60 @@ impl Config {
         directories::ProjectDirs::from("com", "layermind", "LayerMind")
             .map(|d| d.config_dir().to_path_buf())
             .unwrap_or_else(|| std::path::PathBuf::from(".layermind"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn provider_config_defaults() {
+        let cfg = ProviderConfig::default();
+        assert_eq!(cfg.provider, "custom");
+        assert_eq!(cfg.model, "gpt-4o");
+        assert!(cfg.endpoint.is_none());
+        assert!(cfg.api_key.is_none());
+    }
+
+    #[test]
+    fn provider_config_serialization_roundtrip() {
+        let cfg = ProviderConfig {
+            provider: "openrouter".into(),
+            endpoint: Some("https://openrouter.ai/api".into()),
+            model: "deepseek/deepseek-chat".into(),
+            api_key: Some("sk-test".into()),
+        };
+        let json = serde_json::to_string(&cfg).unwrap();
+        let deserialized: ProviderConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.provider, "openrouter");
+        assert_eq!(deserialized.model, "deepseek/deepseek-chat");
+    }
+
+    #[test]
+    fn config_backwards_compatible_minimal() {
+        // Config without provider field should deserialize with defaults.
+        let json = r#"{
+            "moonraker": {"url": "ws://localhost:7125/websocket", "api_key": null, "reconnect_interval_secs": 5.0, "heartbeat_interval_secs": 30.0},
+            "telemetry": {"buffer_size": 4096, "flush_interval_secs": 1.0, "max_retries": 3},
+            "database": {"url": "postgres://localhost:5432/layermind", "max_connections": 5, "run_migrations": true},
+            "logging": {"level": "info", "json_output": false}
+        }"#;
+        let cfg: Config = serde_json::from_str(json).unwrap();
+        assert_eq!(cfg.provider.provider, "custom"); // default
+    }
+
+    #[test]
+    fn config_with_provider_field() {
+        let json = r#"{
+            "moonraker": {"url": "ws://localhost:7125/websocket", "api_key": null, "reconnect_interval_secs": 5.0, "heartbeat_interval_secs": 30.0},
+            "telemetry": {"buffer_size": 4096, "flush_interval_secs": 1.0, "max_retries": 3},
+            "database": {"url": "postgres://localhost:5432/layermind", "max_connections": 5, "run_migrations": true},
+            "logging": {"level": "info", "json_output": false},
+            "provider": {"provider": "ollama", "model": "llama3.3"}
+        }"#;
+        let cfg: Config = serde_json::from_str(json).unwrap();
+        assert_eq!(cfg.provider.provider, "ollama");
+        assert_eq!(cfg.provider.model, "llama3.3");
     }
 }

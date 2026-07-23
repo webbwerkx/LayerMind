@@ -189,7 +189,7 @@ impl PrintDoctor {
 
 fn build_explanation_factors(
     recommendation: &layermind_shared::recommendation::Recommendation,
-    context: &PrinterContext,
+    _context: &PrinterContext,
 ) -> Vec<layermind_shared::recommendation::ExplanationFactor> {
     use layermind_shared::context::EvidenceQuality;
     use layermind_shared::recommendation::ExplanationFactor;

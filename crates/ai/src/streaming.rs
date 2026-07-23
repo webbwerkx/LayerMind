@@ -32,3 +32,31 @@ pub trait StreamingAiProvider: Send + Sync {
         request: AiRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, AiError>> + Send>>, AiError>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Verify trait is object-safe and implements Send + Sync.
+    fn _assert_streaming_trait_object_safe(_p: &dyn StreamingAiProvider) {}
+
+    fn _assert_send_sync<T: Send + Sync>(_t: &T) {}
+
+    #[test]
+    fn stream_chunk_is_clone() {
+        let chunk = StreamChunk {
+            content: "test".into(),
+            done: false,
+        };
+        let _c2 = chunk.clone();
+    }
+
+    #[test]
+    fn stream_chunk_done_flag_works() {
+        let chunk = StreamChunk {
+            content: "final".into(),
+            done: true,
+        };
+        assert!(chunk.done);
+    }
+}

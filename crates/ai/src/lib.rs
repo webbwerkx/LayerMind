@@ -143,3 +143,151 @@ fn resolve_key(config: &ProviderConfig, env_var: &str) -> Result<String, Provide
     }
     std::env::var(env_var).map_err(|_| ProviderCreationError::MissingApiKey(env_var.into()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use layermind_config::ProviderConfig;
+
+    fn config_for(provider: &str) -> ProviderConfig {
+        ProviderConfig {
+            provider: provider.into(),
+            model: "test-model".into(),
+            api_key: Some("test-key".into()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn create_openai_with_key() {
+        let cfg = config_for("openai");
+        let result = create_provider(&cfg);
+        assert!(result.is_ok());
+        let p = result.unwrap();
+        assert_eq!(p.name(), "openai");
+        assert_eq!(p.model(), "test-model");
+    }
+
+    #[test]
+    fn create_openai_missing_key() {
+        let cfg = ProviderConfig {
+            provider: "openai".into(),
+            model: "m".into(),
+            api_key: None,
+            ..Default::default()
+        };
+        let result = create_provider(&cfg);
+        match result {
+            Ok(_) => {} // env var was set, test passes
+            Err(e) => assert!(matches!(e, ProviderCreationError::MissingApiKey(_))),
+        }
+    }
+
+    #[test]
+    fn create_openrouter_returns_correct_name() {
+        let cfg = config_for("openrouter");
+        let result = create_provider(&cfg);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().name(), "openrouter");
+    }
+
+    #[test]
+    fn create_ollama_no_auth() {
+        let cfg = ProviderConfig {
+            provider: "ollama".into(),
+            model: "llama3.3".into(),
+            ..Default::default()
+        };
+        let result = create_provider(&cfg);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().name(), "ollama");
+    }
+
+    #[test]
+    fn create_anthropic_with_key() {
+        let cfg = config_for("anthropic");
+        let result = create_provider(&cfg);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().name(), "anthropic");
+    }
+
+    #[test]
+    fn create_gemini_with_key() {
+        let cfg = config_for("gemini");
+        let result = create_provider(&cfg);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().name(), "gemini");
+    }
+
+    #[test]
+    fn create_custom_requires_endpoint() {
+        let cfg = ProviderConfig {
+            provider: "custom".into(),
+            model: "m".into(),
+            endpoint: None,
+            ..Default::default()
+        };
+        let result = create_provider(&cfg);
+        match result {
+            Err(ProviderCreationError::InvalidConfig(_)) => {} // expected
+            other => panic!("expected InvalidConfig, got {:?}", other.err()),
+        }
+    }
+
+    #[test]
+    fn create_custom_with_endpoint() {
+        let cfg = ProviderConfig {
+            provider: "custom".into(),
+            model: "m".into(),
+            endpoint: Some("http://localhost:9999".into()),
+            api_key: Some("k".into()),
+        };
+        let result = create_provider(&cfg);
+        match result {
+            Ok(p) => assert_eq!(p.name(), "custom"),
+            Err(e) => panic!("unexpected error: {}", e),
+        }
+    }
+
+    #[test]
+    fn create_unknown_provider_errors() {
+        let cfg = ProviderConfig {
+            provider: "nonexistent".into(),
+            model: "m".into(),
+            ..Default::default()
+        };
+        let result = create_provider(&cfg);
+        match result {
+            Err(ProviderCreationError::UnknownProvider(_)) => {} // expected
+            other => panic!("expected UnknownProvider, got {:?}", other.err()),
+        }
+    }
+
+    #[test]
+    fn all_known_providers_produce_valid_providers() {
+        for name in &[
+            "openai",
+            "openrouter",
+            "ollama",
+            "anthropic",
+            "gemini",
+            "custom",
+        ] {
+            let cfg = ProviderConfig {
+                provider: name.to_string(),
+                model: "m".into(),
+                endpoint: if *name == "custom" {
+                    Some("http://localhost:9999".into())
+                } else {
+                    None
+                },
+                api_key: Some("k".into()),
+            };
+            let result = create_provider(&cfg);
+            match result {
+                Ok(p) => assert_eq!(p.model(), "m"),
+                Err(e) => panic!("failed for provider '{}': {}", name, e),
+            }
+        }
+    }
+}

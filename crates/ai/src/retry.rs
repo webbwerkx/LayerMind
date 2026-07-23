@@ -89,3 +89,91 @@ impl AiProvider for RetryingProvider {
 fn is_retryable(error: &AiError) -> bool {
     matches!(error, AiError::Http(_) | AiError::RateLimited { .. })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_trait::async_trait;
+    use layermind_reasoning::provider::{AiError, TokenUsage};
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    struct FailingThenSuccessProvider {
+        name: String,
+        model: String,
+        fail_count: AtomicU32,
+        max_fails: u32,
+        success_response: String,
+    }
+
+    #[async_trait]
+    impl AiProvider for FailingThenSuccessProvider {
+        async fn complete(&self, _request: AiRequest) -> Result<AiResponse, AiError> {
+            let attempts = self.fail_count.fetch_add(1, Ordering::SeqCst);
+            if attempts < self.max_fails {
+                Err(AiError::Http("transient failure".into()))
+            } else {
+                Ok(AiResponse {
+                    content: self.success_response.clone(),
+                    usage: TokenUsage {
+                        prompt_tokens: 10,
+                        completion_tokens: 20,
+                        total_tokens: 30,
+                    },
+                    model: self.model.clone(),
+                })
+            }
+        }
+
+        fn name(&self) -> &str {
+            &self.name
+        }
+
+        fn model(&self) -> &str {
+            &self.model
+        }
+    }
+
+    #[test]
+    fn retries_transient_http_failures() {
+        let inner = FailingThenSuccessProvider {
+            name: "test".into(),
+            model: "m".into(),
+            fail_count: AtomicU32::new(0),
+            max_fails: 2,
+            success_response: "success".into(),
+        };
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let provider = RetryingProvider::new(Arc::new(inner), 3);
+        let request = AiRequest {
+            system_prompt: "s".into(),
+            user_prompt: "u".into(),
+            max_tokens: 100,
+            temperature: 0.3,
+        };
+
+        let result = rt.block_on(provider.complete(request));
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().content, "success");
+    }
+
+    #[test]
+    fn does_not_retry_unauthorized() {
+        assert!(!is_retryable(&AiError::Unauthorized("bad key".into())));
+    }
+
+    #[test]
+    fn does_not_retry_invalid_requests() {
+        assert!(!is_retryable(&AiError::ApiError {
+            status: 400,
+            body: "bad request".into()
+        }));
+    }
+
+    #[test]
+    fn retries_rate_limited() {
+        assert!(is_retryable(&AiError::RateLimited {
+            retry_after: Some("5".into())
+        }));
+    }
+}

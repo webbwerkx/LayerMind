@@ -1,7 +1,7 @@
 # LayerMind — Architecture & Status
 
 > Auto-generated reference document. Last updated: 2025-07-21.
-> Reflects the state of the project after Phase 2.5 freeze.
+> Reflects the state of the project after Phase 2.5.1 freeze.
 
 ---
 
@@ -73,7 +73,8 @@ No cycles. `reasoning` has zero HTTP/networking dependencies. `ai` owns all prov
 | 2.2 Core Integration | ✅ | 11 | diagnose_printer() in core, ContextStore→PrintDoctor flow, typed errors |
 | 2.3 Advanced Diagnostics | ✅ | 34 | ContradictionDetector, EvidenceRanker, ConfidenceCalibrator, Prioritizer, explainability, historical trends |
 | 2.4 Universal Providers | ✅ | 33 | OpenAiCompatible (7+ backends), Anthropic, Gemini, retry wrapper, streaming trait, ProviderConfig |
-| 2.5 Diagnostic Strategies | ✅ | 39 | Rapid/Standard/Thorough presets, DiagnosticOrchestrator, strategy flows through pipeline |
+| 2.5 Diagnostic Strategies | ✅ | 45 | Rapid/Standard/Thorough presets, DiagnosticOrchestrator, strategy flows through pipeline |
+| 2.5.1 Foundation Freeze | ✅ | 141 | Provider tests, config tests, retry tests, streaming tests, strategy verification, doc fix, 0 warnings |
 
 ### Phase 3 — Learning & Optimization (Future)
 
@@ -188,7 +189,7 @@ DiagnosticOrchestrator  ─── selects strategy → PrintDoctor::with_strateg
 
 ---
 
-## Test Matrix (115 total)
+## Test Matrix (141 total)
 
 | Crate | Tests | Coverage |
 |-------|-------|----------|
@@ -199,8 +200,10 @@ DiagnosticOrchestrator  ─── selects strategy → PrintDoctor::with_strateg
 | knowledge | 18 | Scoring, tracker lifecycle, profiler, timeline |
 | moonraker | 4 | Backoff, parsing, integration |
 | printer | 6 | Normalizer, change detection, state machine |
-| reasoning | 39 | Parser, prompt, trust, diagnostic, evidence, confidence, prioritization, contradiction, strategy |
-| **Total** | **115** | |
+| reasoning | 45 | Parser, prompt, trust, diagnostic, evidence, confidence, prioritization, contradiction, strategy |
+| ai | 16 | Provider factory, retry, streaming trait, all-6-providers test |
+| config | 4 | ProviderConfig defaults, serialization, compatibility |
+| **Total** | **141** | |
 
 ---
 

@@ -8,7 +8,7 @@
 //! - Stronger instructions for multi-issue diagnosis and explainability
 
 use crate::evidence::{EvidenceRanker, RankedContext};
-use crate::strategy::{DiagnosticStrategy, PromptVerbosity};
+use crate::strategy::DiagnosticStrategy;
 use layermind_shared::context::PrinterContext;
 use layermind_shared::recommendation::{Contradiction, Trend};
 
