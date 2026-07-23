@@ -187,6 +187,7 @@ mod tests {
             current_state: CurrentState::default(),
             known_issues: Vec::new(),
             historical_patterns: Vec::new(),
+            learning: None,
             history: layermind_shared::history::HistorySummary::default(),
             machine: None,
             recent_evidence: evidence,

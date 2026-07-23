@@ -10,6 +10,7 @@ pub mod error;
 pub mod event;
 pub mod history;
 pub mod knowledge;
+pub mod learning;
 pub mod machine;
 pub mod observation;
 pub mod printer;

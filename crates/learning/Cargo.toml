@@ -1,0 +1,17 @@
+[package]
+name = "layermind-learning"
+version = "0.1.0"
+edition = "2021"
+description = "Learning engine — pattern detection, trend analysis, statistical learning from historical data"
+
+[dependencies]
+layermind-shared = { path = "../shared" }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }

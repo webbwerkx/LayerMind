@@ -18,6 +18,7 @@ use layermind_shared::context::{
 };
 use layermind_shared::history::{HistorySummary, RecentChange, TimelineCategory};
 use layermind_shared::knowledge::{Knowledge, KnowledgeKind};
+use layermind_shared::learning::BehaviorSummary;
 use layermind_shared::machine::MachineProfile;
 
 /// How many pieces of evidence to keep in the context.
@@ -78,6 +79,8 @@ pub struct CachedContext {
     pub last_maintenance: Option<chrono::DateTime<chrono::Utc>>,
     pub recent_changes: Vec<RecentChange>,
     pub total_events: u64,
+    // Learning
+    pub learning: Option<BehaviorSummary>,
 }
 
 impl CachedContext {
@@ -116,6 +119,7 @@ impl CachedContext {
             last_maintenance: None,
             recent_changes: Vec::new(),
             total_events: 0,
+            learning: None,
         }
     }
 }
@@ -183,6 +187,18 @@ impl ContextStore {
             .entry(printer_id.into())
             .or_insert_with(|| CachedContext::new(printer_id.into()));
         cached.last_maintenance = Some(Utc::now());
+    }
+
+    /// Update the learning summary for a printer.
+    pub fn set_learning(&self, printer_id: &str, summary: BehaviorSummary) {
+        let mut contexts = self.contexts.write().expect("ContextStore RwLock poisoned");
+        if let Some(cached) = contexts.get_mut(printer_id) {
+            cached.learning = Some(summary);
+        } else {
+            let mut cached = CachedContext::new(printer_id.into());
+            cached.learning = Some(summary);
+            contexts.insert(printer_id.into(), cached);
+        }
     }
 
     /// Inject machine intelligence data into a printer's context.
@@ -274,6 +290,7 @@ impl ContextStore {
                 config_age_days: None,
                 hardware_age_days: None,
             },
+            learning: cached.learning.clone(),
         })
     }
 

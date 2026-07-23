@@ -344,6 +344,7 @@ mod tests {
                 importance: 0.6,
             }],
             historical_patterns: Vec::new(),
+            learning: None,
             history: layermind_shared::history::HistorySummary::default(),
             machine: None,
             recent_evidence: vec![Evidence::observed(

@@ -82,7 +82,8 @@ No cycles. `reasoning` has zero HTTP/networking dependencies. `ai` owns all prov
 | 2.5 Diagnostic Strategies | ✅ | 45 | Rapid/Standard/Thorough presets, DiagnosticOrchestrator, strategy flows through pipeline |
 | 2.5.1 Foundation Freeze | ✅ | 141 | Provider tests, config tests, retry tests, streaming tests, doc fix |
 | 2.6 Machine Intelligence | ✅ | 163 | MachineProfile, CapabilityEngine, confidence model, hardware library, context integration |
-| 3.0 Historical Timeline | ✅ | 180 | TimelineStore, QueryEngine, SnapshotBuilder, DiffEngine, HistorySummary, context integration |
+| 3.0 Historical Timeline | ✅ | 180 | TimelineStore, QueryEngine, SnapshotBuilder, DiffEngine, HistorySummary |
+| 3.0.1 Runtime Application | ✅ | 185 | CLI entry point, bootstrap, commands (test/monitor/diagnose/run), 5 app tests |
 
 ### Phase 3.1+ — Learning (Future)
 

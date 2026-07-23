@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::history::HistorySummary;
+use crate::learning::BehaviorSummary;
 use crate::machine::MachineProfile;
 
 // ── Evidence Quality ────────────────────────────────────────────────
@@ -88,6 +89,8 @@ pub struct PrinterContext {
     pub machine: Option<MachineProfile>,
     /// Recent history digest — key changes and timestamps.
     pub history: HistorySummary,
+    /// Learned behavioral insights — patterns, trends, comparisons.
+    pub learning: Option<BehaviorSummary>,
 }
 
 /// Identity, hardware, and current health snapshot.
@@ -196,6 +199,7 @@ impl PrinterContext {
             recent_evidence: Vec::new(),
             machine: None,
             history: HistorySummary::default(),
+            learning: None,
         }
     }
 }

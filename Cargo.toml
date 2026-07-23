@@ -11,6 +11,7 @@ members = [
     "crates/analyzer",
     "crates/knowledge",
     "crates/context",
+    "crates/learning",
     "crates/history",
     "crates/machine",
     "crates/reasoning",
@@ -52,6 +53,7 @@ layermind-analyzer = { path = "crates/analyzer" }
 layermind-knowledge = { path = "crates/knowledge" }
 layermind-context = { path = "crates/context" }
 layermind-reasoning = { path = "crates/reasoning" }
+layermind-learning = { path = "crates/learning" }
 layermind-machine = { path = "crates/machine" }
 layermind-history = { path = "crates/history" }
 layermind-core = { path = "crates/core" }
