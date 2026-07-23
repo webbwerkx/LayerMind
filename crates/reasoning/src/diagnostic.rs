@@ -344,6 +344,7 @@ mod tests {
                 importance: 0.6,
             }],
             historical_patterns: Vec::new(),
+            machine: None,
             recent_evidence: vec![Evidence::observed(
                 "temperature_reading",
                 "Extruder oscillating ±3.2°C around target 210°C",

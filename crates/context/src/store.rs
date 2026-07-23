@@ -17,6 +17,7 @@ use layermind_shared::context::{
     ObservationSummary, PrintHistorySummary, PrinterContext, PrinterSummary, RecentFailure,
 };
 use layermind_shared::knowledge::{Knowledge, KnowledgeKind};
+use layermind_shared::machine::MachineProfile;
 
 /// How many pieces of evidence to keep in the context.
 const MAX_EVIDENCE: usize = 20;
@@ -66,6 +67,8 @@ pub struct CachedContext {
     pub patterns: Vec<HistoricalPattern>,
     // Evidence ledger
     pub evidence: Vec<Evidence>,
+    /// Machine intelligence profile — hardware, capabilities, confidence.
+    pub machine: Option<MachineProfile>,
 }
 
 impl CachedContext {
@@ -96,6 +99,7 @@ impl CachedContext {
             known_issues: Vec::new(),
             patterns: Vec::new(),
             evidence: Vec::new(),
+            machine: None,
         }
     }
 }
@@ -115,6 +119,18 @@ impl ContextStore {
     pub fn new() -> Self {
         Self {
             contexts: RwLock::new(HashMap::new()),
+        }
+    }
+
+    /// Inject machine intelligence data into a printer's context.
+    pub fn set_machine(&self, printer_id: &str, profile: MachineProfile) {
+        let mut contexts = self.contexts.write().expect("ContextStore RwLock poisoned");
+        if let Some(cached) = contexts.get_mut(printer_id) {
+            cached.machine = Some(profile);
+        } else {
+            let mut cached = CachedContext::new(printer_id.into());
+            cached.machine = Some(profile);
+            contexts.insert(printer_id.into(), cached);
         }
     }
 
@@ -183,6 +199,7 @@ impl ContextStore {
                 .take(MAX_EVIDENCE)
                 .cloned()
                 .collect(),
+            machine: cached.machine.clone(),
         })
     }
 

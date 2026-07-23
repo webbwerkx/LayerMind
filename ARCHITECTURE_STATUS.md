@@ -1,7 +1,9 @@
 # LayerMind — Architecture & Status
 
 > Auto-generated reference document. Last updated: 2025-07-21.
-> Reflects the state of the project after Phase 2.5.1 freeze.
+> Reflects the state of the project after Phase 2.6 freeze.
+>
+> **Phase 2 Foundation Complete. Ready for Phase 3: Learning Engine.**
 
 ---
 
@@ -34,13 +36,15 @@ crates/
 ├── knowledge/       Stateful knowledge layer. Tracker, Profiler, Timeline, Scorer.
 ├── context/         Query layer. ContextEngine (ingestion) + ContextStore (Arc, queryable).
 ├── reasoning/       AI diagnostic pipeline. PrintDoctor, 9 deterministic stages, provider-agnostic.
+├── machine/         Machine intelligence — hardware discovery, capability derivation,
+│                    confidence model, hardware library. Pure deterministic logic.
 ├── ai/              Provider implementations. OpenAiCompatible, Anthropic, Gemini. Retry wrapper.
 └── core/            Orchestration. Wires all tasks, manages lifecycle, exposes diagnose_printer().
 ```
 
 **Dependency Graph:**
 ```
-shared ← config, logging, moonraker, printer, telemetry, database, analyzer, knowledge, context, reasoning
+shared ← config, logging, moonraker, printer, telemetry, database, analyzer, knowledge, context, reasoning, machine
                                                                                                             ↑
 reasoning ← ai (provider implementations)
                                                                                                             ↑
@@ -74,7 +78,8 @@ No cycles. `reasoning` has zero HTTP/networking dependencies. `ai` owns all prov
 | 2.3 Advanced Diagnostics | ✅ | 34 | ContradictionDetector, EvidenceRanker, ConfidenceCalibrator, Prioritizer, explainability, historical trends |
 | 2.4 Universal Providers | ✅ | 33 | OpenAiCompatible (7+ backends), Anthropic, Gemini, retry wrapper, streaming trait, ProviderConfig |
 | 2.5 Diagnostic Strategies | ✅ | 45 | Rapid/Standard/Thorough presets, DiagnosticOrchestrator, strategy flows through pipeline |
-| 2.5.1 Foundation Freeze | ✅ | 141 | Provider tests, config tests, retry tests, streaming tests, strategy verification, doc fix, 0 warnings |
+| 2.5.1 Foundation Freeze | ✅ | 141 | Provider tests, config tests, retry tests, streaming tests, doc fix |
+| 2.6 Machine Intelligence | ✅ | 163 | MachineProfile, CapabilityEngine, confidence model, hardware library, context integration |
 
 ### Phase 3 — Learning & Optimization (Future)
 
@@ -189,7 +194,7 @@ DiagnosticOrchestrator  ─── selects strategy → PrintDoctor::with_strateg
 
 ---
 
-## Test Matrix (141 total)
+## Test Matrix (163 total)
 
 | Crate | Tests | Coverage |
 |-------|-------|----------|
@@ -203,7 +208,8 @@ DiagnosticOrchestrator  ─── selects strategy → PrintDoctor::with_strateg
 | reasoning | 45 | Parser, prompt, trust, diagnostic, evidence, confidence, prioritization, contradiction, strategy |
 | ai | 16 | Provider factory, retry, streaming trait, all-6-providers test |
 | config | 4 | ProviderConfig defaults, serialization, compatibility |
-| **Total** | **141** | |
+| machine | 22 | Discovery, capability derivation, confidence, library, builder |
+| **Total** | **163** | |
 
 ---
 

@@ -157,6 +157,7 @@ mod tests {
                 typical_severity: "warning".into(),
                 resolved_count: 0,
             }],
+            machine: None,
             recent_evidence: Vec::new(),
         }
     }

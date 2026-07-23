@@ -1,0 +1,16 @@
+[package]
+name = "layermind-machine"
+version = "0.1.0"
+edition = "2021"
+description = "Machine intelligence — hardware discovery, capability derivation, confidence engine"
+
+[dependencies]
+layermind-shared = { path = "../shared" }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros"] }

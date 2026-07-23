@@ -10,6 +10,7 @@
 use crate::evidence::{EvidenceRanker, RankedContext};
 use crate::strategy::DiagnosticStrategy;
 use layermind_shared::context::PrinterContext;
+use layermind_shared::machine::Property;
 use layermind_shared::recommendation::{Contradiction, Trend};
 
 /// Builds prompts from a PrinterContext with ranked evidence and
@@ -206,6 +207,84 @@ impl PromptBuilder {
             sections.push(contr_lines.join("\n"));
         }
 
+        // ── 9. Machine Intelligence ───────────────
+        if self.strategy.include_historical_trends {
+            if let Some(ref machine) = context.machine {
+                let mut mi_lines = vec!["## Machine Intelligence".to_string()];
+
+                // Identity
+                let id = &machine.identity;
+                mi_lines.push("### Identity".to_string());
+                if let Some(ref mfr) = id.manufacturer {
+                    mi_lines.push(format!("- Manufacturer: {} [{:?}]", mfr.value, mfr.source));
+                }
+                if let Some(ref model) = id.model {
+                    mi_lines.push(format!("- Model: {} [{:?}]", model.value, model.source));
+                }
+                mi_lines.push(format!("- Motion: {:?}", id.machine_type.value));
+
+                // Hardware
+                let hw = &machine.hardware;
+                mi_lines.push("### Hardware".to_string());
+                mi_lines.push(format!(
+                    "- Extruders: {} ({} hotends)",
+                    hw.extruders.len(),
+                    hw.hotends.len()
+                ));
+                if !hw.probes.is_empty() {
+                    mi_lines.push(format!(
+                        "- Probes: {}",
+                        hw.probes
+                            .iter()
+                            .map(|p| format!("{:?}", p.details.probe_type.value))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                }
+                if !hw.accelerometers.is_empty() {
+                    mi_lines.push(format!(
+                        "- Accelerometers: {}",
+                        hw.accelerometers
+                            .iter()
+                            .map(|a| format!("{:?}", a.details.chip.value))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ));
+                }
+                if let Some(ref bed) = hw.bed {
+                    mi_lines.push(format!("- Bed: {:?}", bed.details.bed_type.value));
+                }
+
+                // Capabilities
+                let caps = &machine.capabilities;
+                mi_lines.push("### Capabilities".to_string());
+                let cap = |name: &str, prop: &Property<bool>| {
+                    format!(
+                        "- {}: {} [{:?}]",
+                        name,
+                        if prop.value { "YES" } else { "no" },
+                        prop.source
+                    )
+                };
+                mi_lines.push(cap("Input shaping", &caps.supports_input_shaping));
+                mi_lines.push(cap("Pressure advance", &caps.supports_pressure_advance));
+                mi_lines.push(cap("Sensorless homing", &caps.supports_sensorless_homing));
+                mi_lines.push(cap("CAN bus", &caps.supports_canbus));
+                mi_lines.push(cap("Tool changer", &caps.supports_toolchanger));
+                mi_lines.push(cap("High temperature", &caps.supports_high_temperature));
+                mi_lines.push(format!(
+                    "- Max temperature: {:.0}°C",
+                    caps.maximum_temperature.value
+                ));
+                mi_lines.push(format!(
+                    "- Max velocity: {:.0} mm/s",
+                    caps.maximum_velocity.value
+                ));
+
+                sections.push(mi_lines.join("\n"));
+            }
+        }
+
         sections.join("\n\n")
     }
 }
@@ -247,6 +326,7 @@ mod tests {
             current_state: CurrentState::default(),
             known_issues: Vec::new(),
             historical_patterns: Vec::new(),
+            machine: None,
             recent_evidence: Vec::new(),
         }
     }

@@ -17,6 +17,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::machine::MachineProfile;
+
 // ── Evidence Quality ────────────────────────────────────────────────
 
 /// Provenance of a piece of information: how we know it.
@@ -80,6 +82,9 @@ pub struct PrinterContext {
     pub known_issues: Vec<IssueSummary>,
     pub historical_patterns: Vec<HistoricalPattern>,
     pub recent_evidence: Vec<Evidence>,
+    /// Complete machine intelligence profile — hardware, capabilities,
+    /// and confidence scores. `None` if not yet computed.
+    pub machine: Option<MachineProfile>,
 }
 
 /// Identity, hardware, and current health snapshot.
@@ -186,6 +191,7 @@ impl PrinterContext {
             known_issues: Vec::new(),
             historical_patterns: Vec::new(),
             recent_evidence: Vec::new(),
+            machine: None,
         }
     }
 }

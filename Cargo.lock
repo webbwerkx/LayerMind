@@ -962,6 +962,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "layermind-machine"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "layermind-shared",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "layermind-moonraker"
 version = "0.1.0"
 dependencies = [
