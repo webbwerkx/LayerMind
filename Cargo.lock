@@ -843,11 +843,13 @@ dependencies = [
 name = "layermind-ai"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "chrono",
+ "futures-util",
  "layermind-config",
- "layermind-logging",
+ "layermind-reasoning",
  "layermind-shared",
- "layermind-telemetry",
+ "reqwest",
  "serde",
  "serde_json",
  "thiserror",
@@ -1002,7 +1004,6 @@ dependencies = [
  "chrono",
  "futures-util",
  "layermind-shared",
- "reqwest",
  "serde",
  "serde_json",
  "thiserror",

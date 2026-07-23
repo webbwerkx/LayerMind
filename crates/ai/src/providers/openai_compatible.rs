@@ -1,37 +1,37 @@
-//! OpenAI-compatible provider implementation.
+//! OpenAI-compatible provider — the universal `/v1/chat/completions` backend.
 //!
-//! Implements the `/v1/chat/completions` contract shared by:
-//! - OpenAI
-//! - OpenRouter
-//! - Anthropic (via compatible gateway)
-//! - DeepSeek, Mistral, Groq, etc.
-//! - Local llama.cpp server
-//! - Local Ollama
+//! Covers: OpenAI, OpenRouter, Ollama (v0.1.24+), LM Studio, vLLM,
+//! LocalAI, llama.cpp server, and any other endpoint that speaks the
+//! OpenAI chat completions contract.
 
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
-use super::{AiError, AiProvider, AiRequest, AiResponse, TokenUsage};
+use layermind_reasoning::provider::{AiError, AiProvider, AiRequest, AiResponse, TokenUsage};
 
-/// An OpenAI-compatible provider.
+/// A provider for any OpenAI-compatible `/v1/chat/completions` endpoint.
+///
+/// Configurable via base URL, API key, and model name. Works with:
+///   - OpenAI: base = "https://api.openai.com"
+///   - OpenRouter: base = "https://openrouter.ai/api"
+///   - Ollama: base = "http://localhost:11434"
+///   - LM Studio: base = "http://localhost:1234"
+///   - vLLM: base = "http://localhost:8000"
+///   - LocalAI: base = "http://localhost:8080"
 #[derive(Debug)]
-pub struct OpenAiProvider {
+pub struct OpenAiCompatibleProvider {
+    name: String,
     client: Client,
     base_url: String,
     api_key: String,
     model: String,
 }
 
-impl OpenAiProvider {
-    /// Create a new provider.
-    ///
-    /// `base_url` should be the API endpoint root, e.g.:
-    /// - `https://api.openai.com` (default)
-    /// - `https://openrouter.ai/api` (OpenRouter)
-    /// - `http://localhost:8080` (local llama.cpp)
+impl OpenAiCompatibleProvider {
     pub fn new(base_url: &str, api_key: &str, model: &str) -> Self {
         Self {
+            name: "openai_compatible".into(),
             client: Client::new(),
             base_url: base_url.trim_end_matches('/').to_string(),
             api_key: api_key.to_string(),
@@ -39,16 +39,10 @@ impl OpenAiProvider {
         }
     }
 
-    /// Create a provider from the standard OPENAI_API_KEY env var.
-    pub fn from_env(model: &str) -> Result<Self, AiError> {
-        let api_key = std::env::var("OPENAI_API_KEY")
-            .or_else(|_| std::env::var("LAYERMIND_OPENAI_API_KEY"))
-            .map_err(|_| {
-                AiError::NotConfigured("OPENAI_API_KEY or LAYERMIND_OPENAI_API_KEY not set".into())
-            })?;
-        let base_url =
-            std::env::var("OPENAI_BASE_URL").unwrap_or_else(|_| "https://api.openai.com".into());
-        Ok(Self::new(&base_url, &api_key, model))
+    /// Set the display name (e.g. "openrouter", "ollama").
+    pub fn with_name(mut self, name: &str) -> Self {
+        self.name = name.into();
+        self
     }
 
     fn chat_url(&self) -> String {
@@ -57,7 +51,7 @@ impl OpenAiProvider {
 }
 
 #[async_trait]
-impl AiProvider for OpenAiProvider {
+impl AiProvider for OpenAiCompatibleProvider {
     async fn complete(&self, request: AiRequest) -> Result<AiResponse, AiError> {
         let body = ChatRequest {
             model: self.model.clone(),
@@ -73,18 +67,19 @@ impl AiProvider for OpenAiProvider {
             ],
             max_tokens: request.max_tokens,
             temperature: request.temperature,
-            response_format: None,
         };
 
-        let resp = self
+        let mut req = self
             .client
             .post(&self.chat_url())
-            .header("Authorization", format!("Bearer {}", self.api_key))
             .header("Content-Type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| AiError::Http(e.to_string()))?;
+            .json(&body);
+
+        if !self.api_key.is_empty() {
+            req = req.header("Authorization", format!("Bearer {}", self.api_key));
+        }
+
+        let resp = req.send().await.map_err(|e| AiError::Http(e.to_string()))?;
 
         let status = resp.status();
         if !status.is_success() {
@@ -95,7 +90,7 @@ impl AiProvider for OpenAiProvider {
                 .map(String::from);
             let body = resp.text().await.unwrap_or_default();
             return match status.as_u16() {
-                401 => Err(AiError::Unauthorized(body)),
+                401 | 403 => Err(AiError::Unauthorized(body)),
                 429 => Err(AiError::RateLimited { retry_after }),
                 _ => Err(AiError::ApiError {
                     status: status.as_u16(),
@@ -129,7 +124,7 @@ impl AiProvider for OpenAiProvider {
     }
 
     fn name(&self) -> &str {
-        "openai"
+        &self.name
     }
 
     fn model(&self) -> &str {
@@ -141,7 +136,7 @@ impl AiProvider for OpenAiProvider {
     }
 }
 
-// ── OpenAI API Types ─────────────────────────────────────────────────
+// ── API Types ────────────────────────────────────────────────────────
 
 #[derive(Debug, Serialize)]
 struct ChatRequest {
@@ -149,20 +144,12 @@ struct ChatRequest {
     messages: Vec<ChatMessage>,
     max_tokens: u32,
     temperature: f32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    response_format: Option<ResponseFormat>,
 }
 
 #[derive(Debug, Serialize)]
 struct ChatMessage {
     role: String,
     content: String,
-}
-
-#[derive(Debug, Serialize)]
-struct ResponseFormat {
-    #[serde(rename = "type")]
-    format_type: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -180,24 +167,4 @@ struct Choice {
 #[derive(Debug, Deserialize)]
 struct ChatMessageResponse {
     content: String,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn from_env_missing_key_returns_error() {
-        // The method returns an error when the env vars are not set.
-        // We can't unset them in tests without affecting other tests,
-        // so we test that from_env works when a bogus URL is used
-        // with a set key. This test is best-effort.
-        let result =
-            std::env::var("OPENAI_API_KEY").or_else(|_| std::env::var("LAYERMIND_OPENAI_API_KEY"));
-        // If neither is set, from_env should fail.
-        if result.is_err() {
-            let provider = OpenAiProvider::from_env("gpt-4o");
-            assert!(provider.is_err());
-        }
-    }
 }

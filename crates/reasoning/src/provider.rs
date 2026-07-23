@@ -1,11 +1,8 @@
 //! AI provider abstraction.
 //!
 //! The `AiProvider` trait decouples the reasoning pipeline from any
-//! specific model or API. The first implementation is OpenAI-compatible,
-//! which covers the entire ecosystem: OpenAI, OpenRouter, Anthropic
-//! (via compatible gateway), local llama.cpp, Ollama.
-
-pub mod openai;
+//! specific model or API. Provider implementations live in the
+//! `layermind-ai` crate.
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};

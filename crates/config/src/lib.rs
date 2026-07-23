@@ -12,6 +12,8 @@ pub struct Config {
     pub telemetry: TelemetryConfig,
     pub database: DatabaseConfig,
     pub logging: LoggingConfig,
+    #[serde(default)]
+    pub provider: ProviderConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,6 +44,46 @@ pub struct LoggingConfig {
     pub json_output: bool,
 }
 
+/// AI provider configuration — selects which backend to use and how to reach it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderConfig {
+    /// Provider identifier: "openai", "openrouter", "anthropic", "gemini",
+    /// "ollama", or "custom".
+    #[serde(default = "default_provider")]
+    pub provider: String,
+    /// API endpoint base URL. When set, overrides the provider default.
+    /// Examples: "https://api.openai.com", "http://localhost:11434",
+    /// "https://openrouter.ai/api".
+    #[serde(default)]
+    pub endpoint: Option<String>,
+    /// Model name: "gpt-4o", "claude-opus-4-20250514", "gemini-2.5-pro",
+    /// "llama3.3", "deepseek-chat", etc.
+    #[serde(default = "default_model")]
+    pub model: String,
+    /// API key. Falls back to provider-specific env vars if not set.
+    #[serde(default)]
+    pub api_key: Option<String>,
+}
+
+fn default_provider() -> String {
+    "custom".into()
+}
+
+fn default_model() -> String {
+    "gpt-4o".into()
+}
+
+impl Default for ProviderConfig {
+    fn default() -> Self {
+        Self {
+            provider: default_provider(),
+            endpoint: None,
+            model: default_model(),
+            api_key: None,
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -65,6 +107,7 @@ impl Default for Config {
                 level: "info".into(),
                 json_output: false,
             },
+            provider: ProviderConfig::default(),
         }
     }
 }

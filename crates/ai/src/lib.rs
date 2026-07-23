@@ -1,47 +1,150 @@
-//! LayerMind AI engine. **DEPRECATED** — replaced by `layermind-reasoning`.
+//! LayerMind AI provider implementations.
 //!
-//! This crate's detection and recommendation logic has been superseded
-//! by the Analyzer (crates/analyzer) for deterministic rules and the
-//! Reasoning Engine (crates/reasoning) for AI-powered diagnostics.
+//! This crate contains provider implementations for every supported
+//! AI backend. The `AiProvider` trait is defined in `layermind-reasoning`;
+//! this crate provides the real implementations.
 //!
-//! This crate is kept for history and will be removed in a future version.
-//! Architecture:
-//!   Telemetry → Event Detection → Interesting Event? → AI Analysis
-//!     → Recommendation → User Feedback → Learning
+//! Supported providers:
+//!   - `OpenAiCompatible` — OpenAI, OpenRouter, Ollama (v0.1.24+),
+//!     LM Studio, vLLM, LocalAI, llama.cpp, and any `/v1/chat/completions`
+//!     endpoint.
+//!   - `AnthropicProvider` — Anthropic Messages API.
+//!   - `GeminiProvider` — Google Gemini generateContent API.
 //!
-//! NOT a chatbot. The AI engine is a background service that observes
-//! telemetry streams and produces structured recommendations.
+//! Use `create_provider()` to instantiate from `ProviderConfig`.
 
-use layermind_shared::error::Result;
-use tokio::sync::broadcast;
+use std::sync::Arc;
 
-mod detector;
-mod recommender;
+use layermind_config::ProviderConfig;
+use layermind_reasoning::provider::AiProvider;
 
-/// The AI engine — subscribes to envelopes and runs detection/recommendation.
-pub struct AiEngine {
-    rx: broadcast::Receiver<layermind_shared::event::Envelope>,
+mod providers;
+mod retry;
+mod streaming;
+
+pub use providers::{AnthropicProvider, GeminiProvider, OpenAiCompatibleProvider};
+pub use retry::RetryingProvider;
+pub use streaming::StreamingAiProvider;
+
+/// Errors specific to provider instantiation and configuration.
+#[derive(Debug, thiserror::Error)]
+pub enum ProviderCreationError {
+    #[error("unknown provider '{0}'. Known: openai, openrouter, anthropic, gemini, ollama, custom")]
+    UnknownProvider(String),
+    #[error("provider '{0}' requires an API key")]
+    MissingApiKey(String),
+    #[error("invalid provider configuration: {0}")]
+    InvalidConfig(String),
 }
 
-impl AiEngine {
-    pub fn new(rx: broadcast::Receiver<layermind_shared::event::Envelope>) -> Self {
-        Self { rx }
-    }
-
-    pub async fn run(mut self) -> Result<()> {
-        tracing::info!("AI engine starting");
-        loop {
-            match self.rx.recv().await {
-                Ok(envelope) => {
-                    // TODO: Feed envelope into detection pipeline
-                    tracing::debug!(event_id = %envelope.event_id, "AI engine received event");
-                }
-                Err(broadcast::error::RecvError::Lagged(n)) => {
-                    tracing::warn!(skipped = n, "AI engine lagging behind telemetry");
-                }
-                Err(broadcast::error::RecvError::Closed) => break,
-            }
+/// Create an AI provider from configuration.
+///
+/// Detects the appropriate backend from `config.provider` and returns
+/// a fully initialized `Arc<dyn AiProvider>` ready for use with
+/// `PrintDoctor`.
+///
+/// API key resolution order (per provider):
+///   1. `config.api_key` (explicit)
+///   2. Provider-specific environment variable
+///
+/// # Examples
+///
+/// ```ignore
+/// let config = ProviderConfig {
+///     provider: "openrouter".into(),
+///     model: "deepseek/deepseek-chat".into(),
+///     api_key: Some("sk-...".into()),
+///     ..Default::default()
+/// };
+/// let provider = create_provider(&config)?;
+/// let doctor = PrintDoctor::new(provider);
+/// ```
+pub fn create_provider(
+    config: &ProviderConfig,
+) -> Result<Arc<dyn AiProvider>, ProviderCreationError> {
+    match config.provider.as_str() {
+        "openai" => {
+            let key = resolve_key(config, "OPENAI_API_KEY")?;
+            let endpoint = config
+                .endpoint
+                .clone()
+                .unwrap_or_else(|| "https://api.openai.com".into());
+            Ok(Arc::new(providers::OpenAiCompatibleProvider::new(
+                &endpoint,
+                &key,
+                &config.model,
+            )))
         }
-        Ok(())
+        "openrouter" => {
+            let key = resolve_key(config, "OPENROUTER_API_KEY")?;
+            let endpoint = config
+                .endpoint
+                .clone()
+                .unwrap_or_else(|| "https://openrouter.ai/api".into());
+            Ok(Arc::new(providers::OpenAiCompatibleProvider::new(
+                &endpoint,
+                &key,
+                &config.model,
+            )))
+        }
+        "ollama" => {
+            let endpoint = config
+                .endpoint
+                .clone()
+                .unwrap_or_else(|| "http://localhost:11434".into());
+            // Ollama doesn't require auth by default.
+            Ok(Arc::new(providers::OpenAiCompatibleProvider::new(
+                &endpoint,
+                "",
+                &config.model,
+            )))
+        }
+        "custom" => {
+            let endpoint = config.endpoint.as_deref().ok_or_else(|| {
+                ProviderCreationError::InvalidConfig(
+                    "custom provider requires an endpoint URL".into(),
+                )
+            })?;
+            let key = config.api_key.clone().unwrap_or_default();
+            Ok(Arc::new(providers::OpenAiCompatibleProvider::new(
+                endpoint,
+                &key,
+                &config.model,
+            )))
+        }
+        "anthropic" => {
+            let key = resolve_key(config, "ANTHROPIC_API_KEY")?;
+            let endpoint = config
+                .endpoint
+                .clone()
+                .unwrap_or_else(|| "https://api.anthropic.com".into());
+            Ok(Arc::new(providers::AnthropicProvider::new(
+                &endpoint,
+                &key,
+                &config.model,
+            )))
+        }
+        "gemini" => {
+            let key = resolve_key(config, "GEMINI_API_KEY")?;
+            let endpoint = config
+                .endpoint
+                .clone()
+                .unwrap_or_else(|| "https://generativelanguage.googleapis.com".into());
+            Ok(Arc::new(providers::GeminiProvider::new(
+                &endpoint,
+                &key,
+                &config.model,
+            )))
+        }
+        other => Err(ProviderCreationError::UnknownProvider(other.into())),
     }
+}
+
+fn resolve_key(config: &ProviderConfig, env_var: &str) -> Result<String, ProviderCreationError> {
+    if let Some(ref key) = config.api_key {
+        if !key.is_empty() {
+            return Ok(key.clone());
+        }
+    }
+    std::env::var(env_var).map_err(|_| ProviderCreationError::MissingApiKey(env_var.into()))
 }
