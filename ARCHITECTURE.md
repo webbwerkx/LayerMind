@@ -16,16 +16,13 @@ LayerMind follows a layered, event-driven architecture. Each layer has a clear r
 │                  Orchestration                   │
 │               (crates/core)                      │
 ├──────────────┬────────────────┬─────────────────┤
-│ Printer      │ AI Engine      │ Knowledge       │
-│ Layer        │ (crates/ai)    │ Engine          │
-│ (printer,    │                │ (future)        │
-│  moonraker)  │                │                 │
+│ Printer      │ Reasoning      │ Knowledge       │
+│ Layer        │ Engine         │ Engine          │
+│ (printer,    │ (reasoning)    │ (knowledge,     │
+│  moonraker)  │                │  analyzer)      │
 ├──────────────┴────────────────┴─────────────────┤
-│             Telemetry Pipeline                   │
-│            (crates/telemetry)                    │
-├─────────────────────────────────────────────────┤
-│              Data Storage                        │
-│           (crates/database)                      │
+│             Context & Telemetry                  │
+│    (context, telemetry, database)                │
 ├─────────────────────────────────────────────────┤
 │           Shared Primitives                      │
 │    (crates/shared, config, logging)              │
@@ -36,15 +33,19 @@ LayerMind follows a layered, event-driven architecture. Each layer has a clear r
 
 ```
 core
- ├── ai ──────────┐
- ├── telemetry ───┤
- │    ├── printer ─┤
+ ├── ai (deprecated) ──┐
+ ├── reasoning ────────┤
+ ├── context ──────────┤
+ ├── knowledge ────────┤
+ ├── analyzer ─────────┤
+ ├── telemetry ────────┤
+ │    ├── printer ─────┤
  │    │    └── moonraker
- │    └── database
- ├── database ────┤
- ├── logging ─────┤
- ├── config ──────┤
- └── shared ◄─────┘  (everything depends on shared)
+ │    └── database ────┤
+ ├── database ─────────┤
+ ├── logging ──────────┤
+ ├── config ───────────┤
+ └── shared ◄──────────┘  (everything depends on shared)
 ```
 
 ## Crate Responsibilities
@@ -164,6 +165,15 @@ Query layer that synthesizes knowledge into AI-consumable printer
 briefings. Subscribes to Knowledge broadcast, caches state, produces
 PrinterContext on demand.
 
+Architecture (refactored in Phase 2.2):
+- `ContextEngine` — ingestion-only: receives Knowledge records,
+  calls `ContextStore::update()`.
+- `ContextStore` — data holder behind `std::sync::RwLock`, shared
+  via `Arc<ContextStore>`. Exposes `context(printer_id)` for
+  consumers (PrintDoctor, future CLI/REST/Web).
+- `CachedContext` — per-printer aggregated state (health, print
+  history, known issues, historical patterns, evidence ledger).
+
 - `PrinterContext` — complete briefing: identity, health, print history,
   current state, known issues, historical patterns, evidence ledger
 - Every fact carries `EvidenceQuality` (observed/inferred/confirmed)
@@ -198,7 +208,13 @@ MoonrakerClient.run() → broadcast(RpcMessage)
         ├──→ bridge task → mpsc → TelemetryEngine.run(sink) → DatabaseSink → PostgreSQL
         └──→ AnalyzerEngine.run() → broadcast(Observation)
                 └──→ KnowledgeEngine.run() → broadcast(Knowledge)
-                        └──→ ContextEngine.run() → cached PrinterContext (queryable)
+                        └──→ ContextEngine.run() → ContextStore (Arc, queryable)
+                                  │
+                            diagnose_printer()
+                                  │
+                            PrintDoctor.diagnose()
+                                  │
+                            ValidatedRecommendation
 ```
 
 ## Moonraker Integration Design
@@ -269,10 +285,31 @@ Moonraker WebSocket (ws://host:7125/websocket)
         │  • Duplicate event suppression
         ▼
   [telemetry crate]  ── batch (mpsc) ──►  [database crate]
-        │  • Buffer + timed flush
-        │  • Never-drop guarantee
+        │  • Buffer + timed flush                    │
+        │  • Never-drop guarantee                    │
+        ▼                                            ▼
+  [analyzer crate]                            PostgreSQL
+        │  • 4 detection rules               (telemetry_events,
+        │  • PrintTracker, HealthMetrics       printers, etc.)
+        │  • Observation broadcast
         ▼
-  [ai crate]         ── Recommendation ──►  [database crate]
+  [knowledge crate]
+        │  • ObservationTracker, PrinterProfiler
+        │  • TimelineBuilder, KnowledgeScorer
+        │  • Knowledge broadcast
+        ▼
+  [context crate]
+        │  • ContextEngine (ingestion) → ContextStore (Arc)
+        │  • context(printer_id) → PrinterContext
+        ▼
+  [reasoning crate]
+        │  • PrintDoctor (10-step pipeline)
+        │  • ContradictionDetector, EvidenceRanker
+        │  • ConfidenceCalibrator, Prioritizer
+        │  • TrustValidator, PromptBuilder
+        │  • AiProvider trait (provider-agnostic)
+        ▼
+  ValidatedRecommendation
 ```
 
 ## Event Bus
@@ -448,3 +485,20 @@ The telemetry pipeline writes to a configurable sink. Local-only mode writes to 
 - No telemetry phones home
 - Cloud features will be opt-in
 - API keys stored with filesystem permissions
+
+## Technical Debt Register
+
+The following items were identified during the Phase 2.3 architecture
+review. They are intentionally deferred — none are blockers for Phase
+2.4. All are low-effort, low-risk improvements.
+
+| # | Source | Issue | Priority | Phase |
+|---|--------|-------|----------|-------|
+| 1 | `reasoning/src/evidence.rs` | `ScoredEvidence`, `ScoredIssue`, `ScoredObservation` are `pub` but only used crate-internally. Should be `pub(crate)`. | Low | 2.4 |
+| 2 | `reasoning/src/prompt.rs` | `PromptBuilder::system_prompt()` and `user_prompt()` are `pub` but only called from `build()`. Should be `pub(crate)`. | Low | 2.4 |
+| 3 | `reasoning/src/evidence.rs` | `EvidenceRanker::score_evidence()` adds constant 0.45 weight (repetition+severity+active) that doesn't differentiate between evidence items. Remove or document. | Low | 2.4 |
+| 4 | `core/src/lib.rs:102` | `_printer_tx` clones a broadcast `Sender` and immediately drops it. Dead code. | Low | 3.x |
+| 5 | `context/src/store.rs:190` | `printer_count()` defined but never called. Useful for future dashboard. Keep until used. | Trivial | 3.x |
+
+All five items are cosmetic or documentation issues. None affect correctness,
+performance, or the public API surface.
