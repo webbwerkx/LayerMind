@@ -1,21 +1,25 @@
 # LayerMind — Architecture & Status
 
-> Auto-generated reference document. Last updated: 2025-07-21.
-> Reflects the state of the project after Phase 3.0 freeze.
+> Auto-generated reference document. Last updated: 2025-07-23.
+> Reflects project state after Phase 4 freeze.
 >
-> **Phase 3.0: Historical Timeline — Foundation Complete.**
+> **Phase 4: Optimization Engine complete. 213 tests. 18 packages. 0 clippy errors.**
 
 ---
 
-## Project Overview
+## Phase Completion Status
 
-LayerMind is an AI-powered operating system for additive manufacturing (3D printing). It connects to printers via Moonraker's WebSocket API, builds a real-time knowledge graph of printer state, and provides evidence-backed AI diagnostics through a provider-agnostic reasoning pipeline.
-
-- **Language**: Rust (workspace of 13 crates)
-- **Database**: PostgreSQL via sqlx (TimescaleDB-ready schema)
-- **AI**: Provider-agnostic via `AiProvider` trait — supports OpenAI, OpenRouter, Anthropic, Gemini, Ollama, LM Studio, vLLM, LocalAI, llama.cpp
-- **Tests**: 115 (as of Phase 2.5)
-- **Version**: 0.2.0 (recommended after Phase 2 freeze)
+| Phase | Status | Tests | Key |
+|-------|--------|-------|-----|
+| 1 — Telemetry & Data Collection | ✅ | 55 | Moonraker, database, telemetry, analyzer, knowledge, context |
+| 2 — AI Diagnostic Foundation | ✅ | 86 | Provider abstraction, PrintDoctor, trust, confidence, strategies |
+| 2.5.1 — Foundation Freeze | ✅ | 26 | Provider tests, config, retry, streaming, doc fixes |
+| 2.6 — Machine Intelligence | ✅ | 22 | MachineProfile, CapabilityEngine, hardware library |
+| 3.0 — Historical Timeline | ✅ | 17 | TimelineStore, QueryEngine, Snapshots, Diffs |
+| 3.0.1 — Runtime Application | ✅ | 5 | CLI, bootstrap, commands (test/monitor/diagnose/run) |
+| 3.1 — Learning Engine | ✅ | 13 | Pattern detection, trend analysis, print comparison, calibration tracking |
+| 3.2 — Failure Prediction | ✅ | 19 | Component health, aging predictions, early warnings |
+| 4 — Optimization Engine | ✅ | 28 | Tuning suggestions, calibration plans, maintenance actions |
 
 ---
 
@@ -23,296 +27,105 @@ LayerMind is an AI-powered operating system for additive manufacturing (3D print
 
 ```
 crates/
-├── shared/          Canonical types, error enums, Sink trait. Zero business logic.
-│                    Every crate depends on this; this depends on nothing internal.
-├── config/          Typed configuration loading (env vars, future XDG files).
-├── logging/         Tracing subscriber init (human-readable + JSON output).
-├── moonraker/       WebSocket client for Moonraker's JSON-RPC 2.0 protocol.
-├── printer/         Normalization layer. Moonraker → canonical Envelope events.
-│                    Change detection (temp 0.5°C, position 0.1mm, speed 1.0mm/s, fan 2%).
-├── telemetry/       Event pipeline: buffer → batch → Sink. Never-drop guarantee.
-├── database/        PostgreSQL via sqlx. DatabaseSink, Repository, migrations.
-├── analyzer/        Deterministic rules engine. 4 detection rules, PrintTracker, HealthMetrics.
-├── knowledge/       Stateful knowledge layer. Tracker, Profiler, Timeline, Scorer.
-├── context/         Query layer. ContextEngine (ingestion) + ContextStore (Arc, queryable).
-├── reasoning/       AI diagnostic pipeline. PrintDoctor, 9 deterministic stages, provider-agnostic.
-├── machine/         Machine intelligence — hardware discovery, capability derivation,
-│                    confidence model, hardware library. Pure deterministic logic.
-├── history/         Historical timeline — immutable events, snapshots, diffs,
-│                    strongly-typed queries, statistics. Append-only, no AI.
-├── ai/              Provider implementations. OpenAiCompatible, Anthropic, Gemini. Retry wrapper.
-└── core/            Orchestration. Wires all tasks, manages lifecycle, exposes diagnose_printer().
+├── shared/          Canonical types (19 modules). Zero business logic.
+├── config/          Typed configuration (env vars, XDG).
+├── logging/         Tracing subscriber.
+├── moonraker/       WebSocket client (JSON-RPC 2.0).
+├── printer/         Event normalization. Moonraker → canonical Envelope.
+├── telemetry/       Pipeline: buffer → batch → Sink. Never-drop guarantee.
+├── database/        PostgreSQL via sqlx. DatabaseSink, migrations.
+├── analyzer/        Deterministic rules engine (4 detection rules).
+├── knowledge/       Stateful knowledge: Tracker, Profiler, Timeline, Scorer.
+├── context/         Query layer. ContextEngine + ContextStore (Arc).
+├── reasoning/       AI diagnostic pipeline. PrintDoctor, 9 stages.
+├── ai/              Provider implementations. 3 providers, 10+ backends.
+├── machine/         Hardware intelligence. Discovery, capability, confidence.
+├── history/         Timeline: immutable events, snapshots, diffs, queries.
+├── learning/        Pattern detection, trends, prediction, optimization.
+└── core/            Orchestration. Wires all tasks, lifecycle.
+
+apps/
+└── layermind/       Runtime binary. CLI entry point.
 ```
 
-**Dependency Graph:**
+## Dependency Graph
+
 ```
-shared ← config, logging, moonraker, printer, telemetry, database, analyzer, knowledge, context, reasoning, machine
-                                                                                                            ↑
+shared ← config, logging, moonraker, printer, telemetry, database,
+         analyzer, knowledge, context, reasoning, machine, history, learning
 reasoning ← ai (provider implementations)
-                                                                                                            ↑
 core ← all of the above
+apps/layermind ← core + all crates
 ```
 
-No cycles. `reasoning` has zero HTTP/networking dependencies. `ai` owns all provider networking.
-
----
-
-## Phase Completion Status
-
-### Phase 1 — Foundation & Observation ✅
-
-| Milestone | Status | Tests | Key Deliverables |
-|-----------|--------|-------|-----------------|
-| 1.1 Project Foundation | ✅ | — | Workspace, 9 crates, docs, git init |
-| 1.2 Moonraker Integration | ✅ | 4 | WebSocket client, JSON-RPC 2.0, 8 printer objects, reconnect with backoff |
-| 1.3 Memory Engine | ✅ | 6 | Sink trait, DatabaseSink, batch UNNEST, auto-registration, graceful MemorySink fallback |
-| 1.4 Analyzer Engine | ✅ | 17 | 4 detection rules, PrintTracker, HealthMetrics, Observation broadcast |
-| 1.5 Knowledge Engine | ✅ | 18 | Tracker, Profiler, Timeline, Scorer, database migration 002 |
-| 1.6 Context Engine | ✅ | 4 | PrinterContext, EvidenceQuality, ContextEngine + ContextStore separation |
-| 1.7 Basic Dashboard | ⏳ | — | Deferred |
-
-### Phase 2 — AI Reasoning ✅
-
-| Milestone | Status | Tests | Key Deliverables |
-|-----------|--------|-------|-----------------|
-| 2.1 AI Architecture | ✅ | 17 | AiProvider trait, PrintDoctor, PromptBuilder, ResponseParser, TrustValidator, MockProvider |
-| 2.2 Core Integration | ✅ | 11 | diagnose_printer() in core, ContextStore→PrintDoctor flow, typed errors |
-| 2.3 Advanced Diagnostics | ✅ | 34 | ContradictionDetector, EvidenceRanker, ConfidenceCalibrator, Prioritizer, explainability, historical trends |
-| 2.4 Universal Providers | ✅ | 33 | OpenAiCompatible (7+ backends), Anthropic, Gemini, retry wrapper, streaming trait, ProviderConfig |
-| 2.5 Diagnostic Strategies | ✅ | 45 | Rapid/Standard/Thorough presets, DiagnosticOrchestrator, strategy flows through pipeline |
-| 2.5.1 Foundation Freeze | ✅ | 141 | Provider tests, config tests, retry tests, streaming tests, doc fix |
-| 2.6 Machine Intelligence | ✅ | 163 | MachineProfile, CapabilityEngine, confidence model, hardware library, context integration |
-| 3.0 Historical Timeline | ✅ | 180 | TimelineStore, QueryEngine, SnapshotBuilder, DiffEngine, HistorySummary |
-| 3.0.1 Runtime Application | ✅ | 185 | CLI entry point, bootstrap, commands (test/monitor/diagnose/run), 5 app tests |
-
-### Phase 3.1+ — Learning (Future)
-
-| Milestone | Status |
-|-----------|--------|
-| 3.1 Printer Health Score | ⏳ |
-| 3.2 Print Intelligence | ⏳ |
-| 3.3 Learning System | ⏳ |
-
-### Phase 4 — Desktop Application (Future)
-
-| Milestone | Status |
-|-----------|--------|
-| 4.1 Tauri Shell | ⏳ |
-| 4.2 Dashboard UI | ⏳ |
-| 4.3 Advanced UI | ⏳ |
-
-### Phase 5 — Fleet & Enterprise (Future)
-
-| Milestone | Status |
-|-----------|--------|
-| 5.1 Fleet Management | ⏳ |
-| 5.2 Enterprise Features | ⏳ |
-| 5.3 Cloud (Opt-in) | ⏳ |
+Zero cycles. Reasoning has zero HTTP deps. Learning depends only on shared.
 
 ---
 
 ## Runtime Architecture
 
-### Data Pipeline (7 concurrent tasks in core)
-
 ```
-Moonraker WebSocket (ws://host:7125/websocket)
-        │
-        ▼
-  MoonrakerClient.run()  ──── broadcast(RpcMessage)
-        │
-        ▼
-  Printer.run_from_moonraker() ──── broadcast(Envelope)
-        │
-        ├──→ bridge task → TelemetryEngine.run(&sink) → DatabaseSink → PostgreSQL
-        │
-        └──→ AnalyzerEngine.run() ──── broadcast(Observation)
-                │
-                ▼
-          KnowledgeEngine.run() ──── broadcast(Knowledge)
-                │
-                ▼
-          ContextEngine.run() → ContextStore (Arc, std::sync::RwLock)
-                │
-                ▼
-          diagnose_printer(store, doctor, printer_id)
-                │
-                ▼
-          PrintDoctor.diagnose(&context) → ValidatedRecommendation
+Moonraker WebSocket
+    │
+    ▼
+Printer (normalization) ──→ Telemetry → DatabaseSink → PostgreSQL
+    │
+    ├──→ Analyzer → Knowledge → ContextStore ──→ diagnose_printer()
+    │                                              │
+    │                                    PrintDoctor → AiProvider → ValidatedRecommendation
+    │
+    └──→ (future) History recording
+              │
+         TimelineStore ──→ LearningEngine::analyze()
+              │
+         BehaviorSummary { patterns, trends, aging, health, optimization }
+              │
+         ContextStore.set_learning() ──→ PrinterContext.learning
 ```
 
-### AI Diagnostic Pipeline (10 stages, 9 deterministic)
+## Data Flow Layers
 
-```
-PrinterContext
-  │
-  ├─ 1. ContradictionDetector::detect()          → Vec<Contradiction>
-  ├─ 2. EvidenceRanker::rank(strategy)           → RankedContext
-  ├─ 3. PromptBuilder::build(strategy)           → PromptPair
-  ├─ 4. AiProvider::complete()                   → AiResponse          [only non-deterministic]
-  ├─ 5. ResponseParser::parse()                  → ParsedRecommendation
-  ├─ 6. ConfidenceCalibrator::calibrate()        → adjusted f64
-  ├─ 7. Prioritizer::prioritize()                → Vec<Action> (reordered)
-  ├─ 8. TrustValidator::validate()               → TrustAssessment
-  └─ 9. build_explanation_factors()              → Vec<ExplanationFactor>
+| Layer | Crate | Output |
+|-------|-------|--------|
+| Raw telemetry | moonraker, printer, telemetry | 10Hz sensor data |
+| Analysis | analyzer, knowledge | Observations |
+| Organization | context | PrinterContext |
+| AI reasoning | reasoning, ai | ValidatedRecommendation |
+| Hardware | machine | MachineProfile, CapabilitySet |
+| Memory | history | TimelineEvent, Snapshot |
+| **Learning** | **learning** | **BehaviorSummary → patterns, trends, health, optimization** |
 
-ValidatedRecommendation { recommendation, trust, disclaimers,
-                          explanation_factors, contradictions }
-```
+## What LayerMind Knows About Every Printer
 
-### Provider Architecture
+1. **Current State** (Phase 1) — what's happening NOW
+2. **Machine Intelligence** (Phase 2.6) — what hardware EXISTS
+3. **Historical Knowledge** (Phase 3.0) — what CHANGED and WHEN
+4. **Behavioral Patterns** (Phase 3.1) — what RECURS and what TRENDS
+5. **Component Health** (Phase 3.2) — what's DEGRADING, what will FAIL
+6. **Optimization Opportunities** (Phase 4) — what to TUNE, CALIBRATE, MAINTAIN
 
-```
-AiProvider trait (reasoning)
-  ├── complete(AiRequest) → AiResponse
-  ├── name() → &str
-  ├── model() → &str
-  └── supports_structured_output() → bool
+## Integration Gaps (not yet wired)
 
-Implementations (ai crate):
-  OpenAiCompatibleProvider ─── /v1/chat/completions (OpenAI, OpenRouter,
-  │                            Ollama, LM Studio, vLLM, LocalAI, llama.cpp)
-  AnthropicProvider         ─── /v1/messages (native)
-  GeminiProvider            ─── /v1beta/models/{model}:generateContent (native)
-
-Infrastructure:
-  RetryingProvider<T>       ─── wraps any provider with exponential backoff
-  StreamingAiProvider (opt) ─── additive trait for future streaming
-
-Factory:
-  create_provider(&ProviderConfig) → Arc<dyn AiProvider>
-  Supports: openai, openrouter, anthropic, gemini, ollama, custom
-```
-
-### Diagnostic Strategies
-
-```
-DiagnosticStrategy { max_evidence, max_issues, max_observations, ... }
-
-  RAPID    (5/3/5, 512 tok, 0.5 temp)  ─── fast, minimal context
-  STANDARD (15/10/10, 1024 tok, 0.3)   ─── Phase 2.4 default
-  THOROUGH (25/15/15, 2048 tok, 0.1)  ─── deep analysis
-
-DiagnosticOrchestrator  ─── selects strategy → PrintDoctor::with_strategy() → diagnose()
-```
-
----
-
-## Test Matrix (163 total)
-
-| Crate | Tests | Coverage |
-|-------|-------|----------|
-| analyzer | 17 | Detection rules, metrics, print tracker |
-| context | 4 | Empty context, profile population, resolved clearing, health |
-| core | 21 | Integration: full flow, errors, multi-issue, confidence, prioritization, contradictions, explainability, strategies |
-| database | 6 | Event mapping, auto-registration, persistence, idempotency |
-| knowledge | 18 | Scoring, tracker lifecycle, profiler, timeline |
-| moonraker | 4 | Backoff, parsing, integration |
-| printer | 6 | Normalizer, change detection, state machine |
-| reasoning | 45 | Parser, prompt, trust, diagnostic, evidence, confidence, prioritization, contradiction, strategy |
-| ai | 16 | Provider factory, retry, streaming trait, all-6-providers test |
-| config | 4 | ProviderConfig defaults, serialization, compatibility |
-| history | 17 | Store, query engine, snapshot builder, diff engine, stats |
-| machine | 22 | Discovery, capability derivation, confidence, library, builder |
-| **Total** | **180** | |
-
----
+| Gap | Impact |
+|-----|--------|
+| Runtime periodic analysis loop | BehaviorSummary never computed during daemon run |
+| Hardware discovery from Moonraker | `MachineProfileBuilder::discover_hardware()` returns defaults |
+| Telemetry→History bridge | TimelineEvents never auto-generated from telemetry |
 
 ## Key Design Decisions
 
-| Decision | Rationale |
-|----------|-----------|
-| Rust primary language | Performance, reliability, memory safety for infrastructure software |
-| Shared types crate | Single source of truth for all cross-crate contracts. Zero business logic |
-| Sink trait in shared | Storage-agnostic telemetry pipeline. PostgreSQL/SQLite/files/cloud — same trait |
-| Broadcast channels | Loose coupling between pipeline stages. Easy testing, zero-copy in-process |
-| Provider-agnostic AI | Single `AiProvider` trait covering 10+ backends. PrintDoctor never sees HTTP |
-| AI crate for implementations | Reasoning has zero networking deps. All provider HTTP lives in `ai` |
-| Deterministic pipeline | Every non-AI step is reproducible. Confidence, prioritization, trust all mechanical |
-| ContextStore via Arc<RwLock> | Queryable cache separated from ingestion engine. No lock held across await |
-| Strategy as config, not enum | Custom strategies are struct literals. No match-everywhere overhead |
-| One AI request per diagnosis | Simplicity. Multi-step reasoning, chaining, agent loops deferred to future phases |
+- Provider-agnostic AI (single `AiProvider` trait, 10+ backends)
+- Deterministic pipeline (every non-AI step is mechanical)
+- Property<T> confidence model (source + confidence on every fact)
+- Strong typing (28 enums in machine crate, 8 event categories in history)
+- Append-only timeline (never delete, never modify events)
+- Threshold-based learning (explicit constants, no ML models)
+- Human-approval gating (all suggestions advisory, never auto-applied)
+
+## Next: Integration
+
+The three wiring gaps above. After those, `layermind monitor` against a real printer shows everything.
 
 ---
 
-## Extension Points
-
-| Area | How to extend |
-|------|--------------|
-| New AI backend (OpenAI-compatible) | 1 line in `create_provider()` factory |
-| New AI backend (native API) | ~100-line provider file + 1 factory arm |
-| New diagnostic strategy | `DiagnosticStrategy { ... }` literal — no code changes |
-| New detection rule | 1 rule file in analyzer + registration in DetectionEngine |
-| New knowledge consumer | Subscribe to Knowledge broadcast, like ContextEngine does |
-| New context view | Add method to ContextStore (e.g. `calibration_context()`) |
-| New storage backend | Implement `Sink` trait in shared |
-| Streaming AI responses | Implement `StreamingAiProvider` on providers, add stream path in PrintDoctor |
-| Provider failover | `FallbackProvider` wrapping `Vec<Arc<dyn AiProvider>>` |
-| Conversational diagnosis | New `ChatDoctor` alongside PrintDoctor, uses same ContextStore |
-| CLI / REST API | Call `diagnose_printer(store, doctor, id)` from any consumer |
-| Multi-printer fleet | `printer_id` on every event. Architecture is multi-printer by design |
-
----
-
-## Technical Debt Register
-
-All items are non-blocking, low-effort improvements documented during architecture reviews.
-
-| # | Source | Issue | Priority | Target |
-|---|--------|-------|----------|--------|
-| 1 | `reasoning/src/evidence.rs` | `ScoredEvidence/Issue/Observation` are `pub` but only used crate-internally. Should be `pub(crate)` | Low | 3.x |
-| 2 | `reasoning/src/prompt.rs` | `system_prompt()` and `user_prompt()` are `pub` but only called from `build()`. Should be `pub(crate)` | Low | 3.x |
-| 3 | `reasoning/src/evidence.rs` | `score_evidence()` adds constant 0.45 weight that doesn't differentiate. Remove or document | Low | 3.x |
-| 4 | `core/src/lib.rs:102` | `_printer_tx` clones a broadcast Sender and immediately drops it | Low | 3.x |
-| 5 | `context/src/store.rs:190` | `printer_count()` defined but never called. Useful for future dashboard | Trivial | 3.x |
-| 6 | `reasoning/src/provider.rs` | `AiError::NotConfigured` variant unused after Phase 2.4 | Low | 3.x |
-| 7 | `ai/src/lib.rs` | No unit tests for `create_provider()` factory | Low | 3.x |
-
----
-
-## Future Horizons (from ROADMAP.md)
-
-- **Material intelligence**: automatic material detection and profile selection
-- **Multi-material optimization**: purge tower optimization, wipe strategies
-- **Slicer integration**: direct feedback loop with slicer settings
-- **Industrial support**: ISO/ASTM compliance features, traceability
-- **Marketplace**: community-contributed profiles, calibrations, recommendations
-
----
-
-## Quick Reference: How Things Connect
-
-```
-User wants to diagnose printer "ender3":
-  1. Config::load() → reads LAYERMIND_PROVIDER, LAYERMIND_MODEL env vars
-  2. create_provider(&config.provider) → Arc<dyn AiProvider>
-  3. PrintDoctor::new(provider) or DiagnosticOrchestrator::diagnose()
-  4. context_store.context("ender3") → Option<PrinterContext>
-  5. doctor.diagnose(&context) → ValidatedRecommendation
-  6. validated.recommendation.actions[0].suggested_command → "PID_CALIBRATE ..."
-```
-
-```
-Adding a new AI backend (e.g., Groq):
-  1. ai/src/providers/groq.rs — impl AiProvider for GroqProvider
-  2. ai/src/lib.rs create_provider() — add "groq" arm
-  3. ai/src/providers/mod.rs — pub use
-  Done. PrintDoctor, reasoning, core — zero changes.
-```
-
-```
-Custom diagnostic strategy:
-  let my_strategy = DiagnosticStrategy {
-      max_evidence: 8,
-      max_tokens: 768,
-      temperature: 0.4,
-      ..DiagnosticStrategy::STANDARD  // inherit rest
-  };
-  let result = DiagnosticOrchestrator::diagnose_with_strategy(
-      &ctx, provider, my_strategy
-  ).await;
-```
-
----
-
-*Generated from project state after Phase 2.5 freeze. See ARCHITECTURE.md for detailed design rationale, ROADMAP.md for future milestones.*
+*Updated after Phase 4 freeze.*
