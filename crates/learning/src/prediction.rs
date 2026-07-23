@@ -90,7 +90,7 @@ impl FailurePredictor {
             if failure_worsening {
                 score -= HEALTH_DECAY_PER_WORSENING_TREND;
             }
-            let score = score.max(0.0).min(1.0);
+            let score = score.clamp(0.0, 1.0);
 
             let degradation_rate = summary
                 .trends

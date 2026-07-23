@@ -183,6 +183,8 @@ pub struct BehaviorSummary {
     pub aging: Vec<AgingReport>,
     /// Per-component health assessments from the prediction engine.
     pub component_health: Vec<ComponentHealth>,
+    /// Optimization suggestions derived from patterns and health.
+    pub optimization: Option<OptimizationReport>,
     /// When this summary was generated.
     pub generated_at: DateTime<Utc>,
     /// Total timeline events analyzed.
@@ -287,5 +289,122 @@ impl BehaviorSummary {
             .iter()
             .filter(|ch| ch.health_score < 0.7)
             .collect()
+    }
+}
+
+// ── Optimization ────────────────────────────────────────────────────
+
+/// A concrete, evidence-backed recommendation for improving printer
+/// performance, reliability, or print quality. All suggestions require
+/// human approval before execution — never auto-applied.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TuningSuggestion {
+    /// What category of tuning this is.
+    pub category: TuningCategory,
+    /// The specific parameter to change (e.g. "pressure_advance").
+    pub parameter: String,
+    /// Current known value, if available.
+    pub current_value: Option<String>,
+    /// Recommended value.
+    pub suggested_value: String,
+    /// Why this suggestion exists — links to evidence.
+    pub evidence: SuggestionEvidence,
+    /// Expected outcome if applied.
+    pub expected_benefit: String,
+    /// Risk of applying this change.
+    pub risk: RiskLevel,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TuningCategory {
+    /// Pressure advance tuning.
+    PressureAdvance,
+    /// Input shaper calibration.
+    InputShaping,
+    /// PID temperature tuning.
+    PidTune,
+    /// Bed mesh recalibration.
+    BedMesh,
+    /// Acceleration / velocity limits.
+    MotionLimits,
+    /// Extruder rotation distance / flow.
+    ExtruderCalibration,
+    /// Probe offset / Z-offset adjustment.
+    ProbeOffset,
+    /// General maintenance (cleaning, lubrication, replacement).
+    Maintenance,
+    /// Full calibration sequence.
+    FullCalibration,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SuggestionEvidence {
+    /// What triggered this suggestion (e.g. "calibration_loop_pattern").
+    pub trigger: String,
+    /// Supporting data points.
+    pub supporting_facts: Vec<String>,
+    /// Patterns or trends that back this up.
+    pub pattern_references: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RiskLevel {
+    /// Safe to apply — well-understood calibration.
+    Low,
+    /// Moderate risk — may affect print quality temporarily.
+    Medium,
+    /// High risk — could cause hardware issues if done incorrectly.
+    High,
+}
+
+/// A recommended calibration plan based on component health and
+/// calibration history.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CalibrationPlan {
+    /// Ordered list of calibrations to perform.
+    pub steps: Vec<TuningSuggestion>,
+    /// Estimated total time in minutes.
+    pub estimated_duration_minutes: u32,
+    /// Whether this is urgent (Critical health) or routine.
+    pub urgency: PlanUrgency,
+    /// When this plan was generated.
+    pub generated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PlanUrgency {
+    /// Routine maintenance — no health issues.
+    Routine,
+    /// Recommended soon — early warning signs.
+    Recommended,
+    /// Urgent — component health is critical.
+    Urgent,
+}
+
+/// Complete optimization report for a printer — all suggestions
+/// across tuning, calibration, and maintenance.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OptimizationReport {
+    /// Individual tuning suggestions.
+    pub suggestions: Vec<TuningSuggestion>,
+    /// Recommended calibration plan, if any issues found.
+    pub calibration_plan: Option<CalibrationPlan>,
+    /// Suggested maintenance actions based on component health.
+    pub maintenance_actions: Vec<TuningSuggestion>,
+    /// When the report was generated.
+    pub generated_at: DateTime<Utc>,
+    /// Total number of suggestions across all categories.
+    pub total_suggestions: u64,
+}
+
+impl Default for OptimizationReport {
+    fn default() -> Self {
+        Self {
+            suggestions: Vec::new(),
+            calibration_plan: None,
+            maintenance_actions: Vec::new(),
+            generated_at: Utc::now(),
+            total_suggestions: 0,
+        }
     }
 }
