@@ -1,21 +1,28 @@
-//! Prompt builder — converts PrinterContext into structured AI prompts.
+//! Prompt builder — converts PrinterContext into optimized AI prompts.
 //!
-//! Produces a system prompt (instructions for the AI role) and a user
-//! prompt (the specific printer context to reason about).
+//! Phase 2.3 improvements:
+//! - Evidence ranked by recency/confidence/relevance (via EvidenceRanker)
+//! - Historical trends included (recurring/new/improving/worsening)
+//! - Contradictions surfaced in the prompt
+//! - Concise, structured format to minimize token usage
+//! - Stronger instructions for multi-issue diagnosis and explainability
 
+use crate::evidence::{EvidenceRanker, RankedContext};
 use layermind_shared::context::PrinterContext;
+use layermind_shared::recommendation::{Contradiction, Trend};
 
-/// Builds prompts from a PrinterContext.
-///
-/// The system prompt defines the AI's role as a 3D printer diagnostic
-/// expert. The user prompt is a structured JSON representation of the
-/// printer's current state, optimized for AI consumption.
+/// Builds prompts from a PrinterContext with ranked evidence and
+/// historical comparison.
 #[derive(Debug, Default)]
-pub struct PromptBuilder;
+pub struct PromptBuilder {
+    ranker: EvidenceRanker,
+}
 
 impl PromptBuilder {
     pub fn new() -> Self {
-        Self
+        Self {
+            ranker: EvidenceRanker::new(),
+        }
     }
 
     /// Build the system prompt — defines the AI's role and output format.
@@ -23,22 +30,176 @@ impl PromptBuilder {
         include_str!("../prompts/system.md").to_string()
     }
 
-    /// Build the user prompt — the printer context to reason about.
-    pub fn user_prompt(&self, context: &PrinterContext) -> String {
-        serde_json::to_string_pretty(context).unwrap_or_else(|_| {
-            format!(
-                "Printer context for {} (serialization failed)",
-                context.printer_id
-            )
-        })
+    /// Build the user prompt — ranked, historical, contradiction-aware.
+    pub fn user_prompt(
+        &self,
+        context: &PrinterContext,
+        contradictions: &[Contradiction],
+    ) -> String {
+        let ranked = self.ranker.rank(context);
+        self.build_structured_prompt(context, &ranked, contradictions)
     }
 
     /// Build the complete prompt pair.
-    pub fn build(&self, context: &PrinterContext) -> PromptPair {
+    pub fn build(&self, context: &PrinterContext, contradictions: &[Contradiction]) -> PromptPair {
         PromptPair {
             system: self.system_prompt(),
-            user: self.user_prompt(context),
+            user: self.user_prompt(context, contradictions),
         }
+    }
+
+    fn build_structured_prompt(
+        &self,
+        context: &PrinterContext,
+        ranked: &RankedContext,
+        contradictions: &[Contradiction],
+    ) -> String {
+        let mut sections = Vec::new();
+
+        // ── 1. Printer identity ────────────────────
+        sections.push(format!("## Printer: {}", context.summary.name));
+        if let Some(ref model) = context.summary.model {
+            sections.push(format!("Model: {}", model));
+        }
+        if let Some(ref fw) = context.summary.firmware {
+            sections.push(format!("Firmware: {}", fw));
+        }
+        sections.push(format!(
+            "Status: {}",
+            if context.current_state.is_printing {
+                "printing"
+            } else {
+                "idle"
+            }
+        ));
+
+        // ── 2. Health snapshot ─────────────────────
+        let health = &context.health;
+        let mut health_lines = vec!["## Health".to_string()];
+        if let Some(stab) = health.temperature_stability {
+            health_lines.push(format!("- Temperature stability: {:.2}", stab));
+        }
+        if let Some(sr) = health.success_rate {
+            health_lines.push(format!("- Success rate: {:.0}%", sr * 100.0));
+        }
+        if let Some(rel) = health.reliability_score {
+            health_lines.push(format!("- Reliability: {:.2}", rel));
+        }
+        health_lines.push(format!("- Recent errors: {}", health.recent_error_count));
+        health_lines.push(format!(
+            "- Recent warnings: {}",
+            health.recent_warning_count
+        ));
+        sections.push(health_lines.join("\n"));
+
+        // ── 3. Print history ──────────────────────
+        let hist = &context.print_history;
+        let mut hist_lines = vec!["## Print History".to_string()];
+        hist_lines.push(format!(
+            "- {} total / {} succeeded / {} failed",
+            hist.total_prints, hist.successful_prints, hist.failed_prints
+        ));
+        if let Some(avg) = hist.avg_duration_secs {
+            hist_lines.push(format!("- Average duration: {:.0}s", avg));
+        }
+        if !hist.recent_failures.is_empty() {
+            hist_lines.push(format!("- {} recent failures", hist.recent_failures.len()));
+            // Show last 3 failure reasons.
+            for f in hist.recent_failures.iter().rev().take(3) {
+                if let Some(ref reason) = f.reason {
+                    hist_lines.push(format!("  - {} (at {})", reason, f.timestamp));
+                }
+            }
+        }
+        if let Some(ref pattern) = hist.common_failure_pattern {
+            hist_lines.push(format!("- Common failure: {}", pattern));
+        }
+        sections.push(hist_lines.join("\n"));
+
+        // ── 4. Ranked known issues ────────────────
+        if !ranked.issues.is_empty() {
+            let mut issue_lines = vec!["## Known Issues (ranked by relevance)".to_string()];
+            for si in &ranked.issues {
+                let trend_str = match si.trend {
+                    Trend::New => "[NEW]",
+                    Trend::Recurring => "[RECURRING]",
+                    Trend::Worsening => "[WORSENING]",
+                    Trend::Improving => "[IMPROVING]",
+                    Trend::Unchanged => "",
+                    Trend::RecentlyResolved => "[RESOLVED]",
+                };
+                issue_lines.push(format!(
+                    "- {} {} ({}x) — {}",
+                    trend_str,
+                    si.issue.description,
+                    si.issue.occurrence_count,
+                    if si.issue.resolved {
+                        "resolved"
+                    } else {
+                        "active"
+                    }
+                ));
+            }
+            sections.push(issue_lines.join("\n"));
+        }
+
+        // ── 5. Ranked recent evidence ─────────────
+        if !ranked.evidence.is_empty() {
+            let mut ev_lines = vec!["## Recent Evidence (ranked)".to_string()];
+            for se in &ranked.evidence {
+                ev_lines.push(format!(
+                    "- [{}] {} (confidence: {:.2})",
+                    se.evidence.quality.as_str(),
+                    se.evidence.statement,
+                    se.evidence.confidence
+                ));
+            }
+            sections.push(ev_lines.join("\n"));
+        }
+
+        // ── 6. Active observations ────────────────
+        if !ranked.active_observations.is_empty() {
+            let mut obs_lines = vec!["## Active Observations".to_string()];
+            for so in &ranked.active_observations {
+                obs_lines.push(format!(
+                    "- [{}] {} ({})",
+                    so.observation.severity, so.observation.message, so.observation.category
+                ));
+            }
+            sections.push(obs_lines.join("\n"));
+        }
+
+        // ── 7. Pending warnings ───────────────────
+        if !context.current_state.pending_warnings.is_empty() {
+            let mut warn_lines = vec!["## Pending Warnings".to_string()];
+            for w in &context.current_state.pending_warnings {
+                warn_lines.push(format!("- {}", w));
+            }
+            sections.push(warn_lines.join("\n"));
+        }
+
+        // ── 8. Contradictions ─────────────────────
+        if !contradictions.is_empty() {
+            let mut contr_lines = vec!["## Contradictions Detected".to_string()];
+            for c in contradictions {
+                contr_lines.push(format!(
+                    "- [{}] {}: `{}` vs `{}`",
+                    match c.severity {
+                        layermind_shared::recommendation::ContradictionSeverity::Critical =>
+                            "CRITICAL",
+                        layermind_shared::recommendation::ContradictionSeverity::Significant =>
+                            "SIGNIFICANT",
+                        layermind_shared::recommendation::ContradictionSeverity::Minor => "minor",
+                    },
+                    c.description,
+                    c.item_a,
+                    c.item_b
+                ));
+            }
+            sections.push(contr_lines.join("\n"));
+        }
+
+        sections.join("\n\n")
     }
 }
 
@@ -54,7 +215,8 @@ mod tests {
     use super::*;
     use chrono::Utc;
     use layermind_shared::context::{
-        CurrentState, HealthSummary, PrintHistorySummary, PrinterSummary,
+        CurrentState, Evidence, EvidenceQuality, HealthSummary, IssueSummary, PrintHistorySummary,
+        PrinterSummary,
     };
 
     fn basic_context() -> PrinterContext {
@@ -87,23 +249,81 @@ mod tests {
         let builder = PromptBuilder::new();
         let prompt = builder.system_prompt();
         assert!(!prompt.is_empty());
-        assert!(prompt.contains("3D printer"));
+        assert!(prompt.contains("diagnostic"));
     }
 
     #[test]
     fn user_prompt_includes_printer_info() {
         let builder = PromptBuilder::new();
         let ctx = basic_context();
-        let prompt = builder.user_prompt(&ctx);
-        assert!(prompt.contains("test-printer"));
+        let prompt = builder.user_prompt(&ctx, &[]);
+        assert!(prompt.contains("Test Printer"));
         assert!(prompt.contains("Ender 3 V2"));
+        assert!(prompt.contains("## Printer"));
+        assert!(prompt.contains("## Health"));
+        assert!(prompt.contains("## Print History"));
     }
 
     #[test]
-    fn prompt_pair_contains_both_prompts() {
+    fn user_prompt_includes_ranked_evidence() {
+        let builder = PromptBuilder::new();
+        let mut ctx = basic_context();
+        ctx.recent_evidence = vec![
+            Evidence::observed("temp", "Very recent reading", 0.95, Utc::now()),
+            Evidence::observed(
+                "temp",
+                "Old reading",
+                0.5,
+                Utc::now() - chrono::Duration::hours(48),
+            ),
+        ];
+        let prompt = builder.user_prompt(&ctx, &[]);
+        assert!(prompt.contains("Recent Evidence"));
+        // Recent should appear before old in ranked output.
+        let recent_pos = prompt.find("Very recent reading").unwrap();
+        let old_pos = prompt.find("Old reading").unwrap();
+        assert!(recent_pos < old_pos);
+    }
+
+    #[test]
+    fn user_prompt_includes_contradictions() {
         let builder = PromptBuilder::new();
         let ctx = basic_context();
-        let pair = builder.build(&ctx);
+        let contradictions = vec![Contradiction {
+            description: "Test conflict".into(),
+            item_a: "a".into(),
+            item_b: "b".into(),
+            severity: layermind_shared::recommendation::ContradictionSeverity::Significant,
+        }];
+        let prompt = builder.user_prompt(&ctx, &contradictions);
+        assert!(prompt.contains("Contradictions Detected"));
+        assert!(prompt.contains("Test conflict"));
+    }
+
+    #[test]
+    fn user_prompt_includes_historical_trends() {
+        let builder = PromptBuilder::new();
+        let mut ctx = basic_context();
+        ctx.known_issues = vec![IssueSummary {
+            category: "thermal".into(),
+            description: "PID oscillation".into(),
+            first_seen: Utc::now(),
+            last_seen: Utc::now(),
+            occurrence_count: 5,
+            resolved: false,
+            importance: 0.7,
+        }];
+        let prompt = builder.user_prompt(&ctx, &[]);
+        assert!(prompt.contains("Known Issues"));
+        assert!(prompt.contains("[RECURRING]"));
+        assert!(prompt.contains("PID oscillation"));
+    }
+
+    #[test]
+    fn prompt_pair_contains_both() {
+        let builder = PromptBuilder::new();
+        let ctx = basic_context();
+        let pair = builder.build(&ctx, &[]);
         assert!(!pair.system.is_empty());
         assert!(!pair.user.is_empty());
     }

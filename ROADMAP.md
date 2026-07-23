@@ -109,15 +109,27 @@
 - [x] 17 unit tests: parser ×7, prompt ×3, trust ×4, diagnostic ×2, openai ×1
 - [x] crates/ai marked deprecated
 
-### Milestone 2.2 — Wire Print Doctor into Core
-- [ ] Wire reasoning into core pipeline (accept PrinterContext from ContextEngine)
-- [ ] Write ValidatedRecommendation to database
-- [ ] Expose via API / CLI
+### Milestone 2.2 — Wire Print Doctor into Core ✅
+- [x] diagnose_printer() public API in core
+- [x] ContextStore → PrintDoctor → ValidatedRecommendation flow
+- [x] Typed errors (MissingContext, ProviderError)
+- [x] Provider-agnostic (MockProvider for tests)
+- [x] TrustValidator always executes
+- [x] 11 integration tests covering happy path and all failure modes
 
-### Milestone 2.3 — Advanced Diagnostics
-- [ ] Multi-issue diagnosis (not just single cause)
-- [ ] Historical comparison: "this is similar to failure X from 3 weeks ago"
-- [ ] Confidence calibration based on user feedback
+### Milestone 2.3 — Advanced Diagnostics ✅
+- [x] Multi-issue diagnosis (AI identifies all active issues)
+- [x] Historical comparison with trend labels (NEW, RECURRING, WORSENING, etc.)
+- [x] Deterministic confidence calibration (evidence quantity, quality, recency, agreement, conflicts)
+- [x] Evidence ranking (recency × confidence × repetition × severity)
+- [x] Recommendation prioritization (health-impact, safety, historical relevance)
+- [x] Contradiction detection (5 rules: resolved/active, temp stability, success vs failures, idle state, opposing categories)
+- [x] Explainability (ExplanationFactor per action: reason, evidence_refs, assumptions, observation_type)
+- [x] Prompt optimization (structured sections, ranked evidence, contradiction inclusion)
+- [x] TrustValidator enhancements (historical agreement, multi-source matching, contradiction awareness)
+- [x] New modules: evidence.rs, contradiction.rs, confidence.rs, prioritization.rs
+- [x] 34 reasoning tests (was 17, +17 new)
+- [x] 100 total workspace tests
 
 ### Milestone 2.4 — Local Models & Streaming
 - [ ] Local model support (llama.cpp, Ollama via same provider interface)

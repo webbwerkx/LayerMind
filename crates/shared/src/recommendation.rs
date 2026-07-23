@@ -8,7 +8,7 @@
 //! Feedback types are included as a foundation for a future learning
 //! loop where user outcomes improve printer knowledge over time.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -93,6 +93,10 @@ pub struct ValidatedRecommendation {
     pub recommendation: Recommendation,
     pub trust: TrustAssessment,
     pub disclaimers: Vec<String>,
+    /// Per-action explainability chain — why each action was recommended.
+    pub explanation_factors: Vec<ExplanationFactor>,
+    /// Contradictions detected between evidence sources during diagnosis.
+    pub contradictions: Vec<Contradiction>,
 }
 
 /// Mechanical cross-reference of AI claims against context evidence.
@@ -151,6 +155,64 @@ pub struct Feedback {
     pub result: FeedbackResult,
     pub notes: Option<String>,
     pub timestamp: DateTime<Utc>,
+}
+
+// ── Explainability ──────────────────────────────────────────────────
+
+/// Why a particular action was recommended — the reasoning chain.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExplanationFactor {
+    /// The reason this factor contributes (e.g. "temperature_instability").
+    pub reason: String,
+    /// Indices into the recommendation's evidence array.
+    pub evidence_refs: Vec<usize>,
+    /// What we assumed that may not be directly observed.
+    pub assumption: Option<String>,
+    /// Whether this factor is directly observed, inferred, or confirmed.
+    pub observation_type: EvidenceQuality,
+    /// How strongly this factor supports the action (0.0–1.0).
+    pub weight: f64,
+}
+
+// ── Historical Trends ──────────────────────────────────────────────
+
+/// How an issue or pattern has evolved over time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Trend {
+    /// First time this has been observed.
+    New,
+    /// Same issue has appeared before (count >= 2).
+    Recurring,
+    /// Frequency or severity is increasing.
+    Worsening,
+    /// Frequency or severity is decreasing.
+    Improving,
+    /// No significant change.
+    Unchanged,
+    /// Previously active, now resolved.
+    RecentlyResolved,
+}
+
+// ── Contradictions ─────────────────────────────────────────────────
+
+/// A contradiction detected between two pieces of evidence in the context.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Contradiction {
+    pub description: String,
+    /// What the first source claims.
+    pub item_a: String,
+    /// What the second source claims (conflicting).
+    pub item_b: String,
+    pub severity: ContradictionSeverity,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ContradictionSeverity {
+    Minor,
+    Significant,
+    Critical,
 }
 
 // ── Constructors ─────────────────────────────────────────────────────
@@ -229,6 +291,8 @@ impl ValidatedRecommendation {
             recommendation,
             trust,
             disclaimers,
+            explanation_factors: Vec::new(),
+            contradictions: Vec::new(),
         }
     }
 }

@@ -109,19 +109,37 @@ PostgreSQL storage backend via `sqlx`. Implements the `Sink` trait as
 ### `reasoning`
 AI-powered diagnostic pipeline. First capability: Print Doctor.
 
-Pipeline: PrinterContext → PromptBuilder → AiProvider → ResponseParser
-  → TrustValidator → ValidatedRecommendation
+Pipeline:
+  PrinterContext
+    → EvidenceRanker (top-N ranked facts by recency × confidence)
+    → ContradictionDetector (5 deterministic rules)
+    → PromptBuilder (structured sections, ranked evidence, trends, contradictions)
+    → AiProvider (model)
+    → ResponseParser (JSON extraction, fallback)
+    → ConfidenceCalibrator (deterministic: evidence quantity/quality/recency/agreement/conflicts)
+    → Prioritizer (health-impact, safety, historical relevance)
+    → TrustValidator (claim cross-reference, historical agreement, contradiction-aware)
+    → ValidatedRecommendation (with explanation_factors + contradictions)
 
 - `AiProvider` trait — abstraction over OpenAI-compatible, OpenRouter,
   local models (llama.cpp, Ollama)
 - Provider-agnostic: one trait, one implementation covers entire
   `/v1/chat/completions` ecosystem
-- PromptBuilder — converts PrinterContext to system + user prompts
-- ResponseParser — handles valid/malformed/missing-field JSON gracefully
+- Evidence ranking: scores by recency (0.30) + confidence (0.25) + repetition (0.20)
+  + severity (0.15) + active (0.10); top 15 evidence, 10 issues, 10 observations
+- Contradiction detection: 5 rules (resolved/active, temp stability mismatch,
+  high success vs frequent failures, idle/printer state, opposing categories)
+- Confidence calibration: base + evidence quantity/quality/recency/agreement
+  bonuses − conflict/staleness penalties; always clamped [0.0, 1.0]
+- PromptBuilder — converts PrinterContext to structured, ranked prompts
+  with historical trend labels and contradiction sections
+- ResponseParser — handles valid/malformed/markdown-wrapped/missing-field JSON
 - TrustValidator — deterministic cross-reference of AI claims vs context
-  evidence; never calls AI
+  evidence; considers historical agreement and contradictions; never calls AI
+- Prioritizer — reorders actions by health-impact × safety × historical relevance
+- Explainability: `ExplanationFactor` per action (reason, evidence_refs,
+  assumptions, observation_type, weight)
 - AiUsage tracking — provider, model, tokens, estimated cost per request
-- Feedback types (Fixed/NotFixed/Incorrect/Helpful) for future learning
 - MockProvider for testing — no real API key needed
 
 Depends only on `shared` + `reqwest` for HTTP.
