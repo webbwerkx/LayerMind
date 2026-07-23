@@ -8,20 +8,22 @@
 //! - Stronger instructions for multi-issue diagnosis and explainability
 
 use crate::evidence::{EvidenceRanker, RankedContext};
+use crate::strategy::{DiagnosticStrategy, PromptVerbosity};
 use layermind_shared::context::PrinterContext;
 use layermind_shared::recommendation::{Contradiction, Trend};
 
 /// Builds prompts from a PrinterContext with ranked evidence and
 /// historical comparison.
-#[derive(Debug, Default)]
 pub struct PromptBuilder {
     ranker: EvidenceRanker,
+    strategy: DiagnosticStrategy,
 }
 
 impl PromptBuilder {
-    pub fn new() -> Self {
+    pub fn new(strategy: DiagnosticStrategy) -> Self {
         Self {
-            ranker: EvidenceRanker::new(),
+            ranker: EvidenceRanker::new(strategy.clone()),
+            strategy,
         }
     }
 
@@ -104,8 +106,13 @@ impl PromptBuilder {
         }
         if !hist.recent_failures.is_empty() {
             hist_lines.push(format!("- {} recent failures", hist.recent_failures.len()));
-            // Show last 3 failure reasons.
-            for f in hist.recent_failures.iter().rev().take(3) {
+            // Show last N failure reasons based on strategy.
+            for f in hist
+                .recent_failures
+                .iter()
+                .rev()
+                .take(self.strategy.max_recent_failures)
+            {
                 if let Some(ref reason) = f.reason {
                     hist_lines.push(format!("  - {} (at {})", reason, f.timestamp));
                 }
@@ -179,7 +186,7 @@ impl PromptBuilder {
         }
 
         // ── 8. Contradictions ─────────────────────
-        if !contradictions.is_empty() {
+        if self.strategy.include_contradictions && !contradictions.is_empty() {
             let mut contr_lines = vec!["## Contradictions Detected".to_string()];
             for c in contradictions {
                 contr_lines.push(format!(
@@ -246,7 +253,7 @@ mod tests {
 
     #[test]
     fn system_prompt_is_non_empty() {
-        let builder = PromptBuilder::new();
+        let builder = PromptBuilder::new(DiagnosticStrategy::STANDARD);
         let prompt = builder.system_prompt();
         assert!(!prompt.is_empty());
         assert!(prompt.contains("diagnostic"));
@@ -254,7 +261,7 @@ mod tests {
 
     #[test]
     fn user_prompt_includes_printer_info() {
-        let builder = PromptBuilder::new();
+        let builder = PromptBuilder::new(DiagnosticStrategy::STANDARD);
         let ctx = basic_context();
         let prompt = builder.user_prompt(&ctx, &[]);
         assert!(prompt.contains("Test Printer"));
@@ -266,7 +273,7 @@ mod tests {
 
     #[test]
     fn user_prompt_includes_ranked_evidence() {
-        let builder = PromptBuilder::new();
+        let builder = PromptBuilder::new(DiagnosticStrategy::STANDARD);
         let mut ctx = basic_context();
         ctx.recent_evidence = vec![
             Evidence::observed("temp", "Very recent reading", 0.95, Utc::now()),
@@ -287,7 +294,7 @@ mod tests {
 
     #[test]
     fn user_prompt_includes_contradictions() {
-        let builder = PromptBuilder::new();
+        let builder = PromptBuilder::new(DiagnosticStrategy::STANDARD);
         let ctx = basic_context();
         let contradictions = vec![Contradiction {
             description: "Test conflict".into(),
@@ -301,8 +308,22 @@ mod tests {
     }
 
     #[test]
+    fn rapid_strategy_suppresses_contradictions() {
+        let builder = PromptBuilder::new(DiagnosticStrategy::RAPID);
+        let ctx = basic_context();
+        let contradictions = vec![Contradiction {
+            description: "Test conflict".into(),
+            item_a: "a".into(),
+            item_b: "b".into(),
+            severity: layermind_shared::recommendation::ContradictionSeverity::Significant,
+        }];
+        let prompt = builder.user_prompt(&ctx, &contradictions);
+        assert!(!prompt.contains("Contradictions Detected"));
+    }
+
+    #[test]
     fn user_prompt_includes_historical_trends() {
-        let builder = PromptBuilder::new();
+        let builder = PromptBuilder::new(DiagnosticStrategy::STANDARD);
         let mut ctx = basic_context();
         ctx.known_issues = vec![IssueSummary {
             category: "thermal".into(),
@@ -321,7 +342,7 @@ mod tests {
 
     #[test]
     fn prompt_pair_contains_both() {
-        let builder = PromptBuilder::new();
+        let builder = PromptBuilder::new(DiagnosticStrategy::STANDARD);
         let ctx = basic_context();
         let pair = builder.build(&ctx, &[]);
         assert!(!pair.system.is_empty());

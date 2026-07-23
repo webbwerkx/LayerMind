@@ -26,6 +26,7 @@ use crate::parser::parse_recommendation;
 use crate::prioritization::Prioritizer;
 use crate::prompt::PromptBuilder;
 use crate::provider::{AiProvider, AiRequest};
+use crate::strategy::DiagnosticStrategy;
 use crate::trust::TrustValidator;
 
 /// AI Print Doctor — diagnoses printer issues from context.
@@ -36,17 +37,25 @@ pub struct PrintDoctor {
     confidence_calibrator: ConfidenceCalibrator,
     prioritizer: Prioritizer,
     trust_validator: TrustValidator,
+    strategy: DiagnosticStrategy,
 }
 
 impl PrintDoctor {
+    /// Create a PrintDoctor with the standard (Phase 2.4) strategy.
     pub fn new(provider: Arc<dyn AiProvider>) -> Self {
+        Self::with_strategy(provider, DiagnosticStrategy::STANDARD)
+    }
+
+    /// Create a PrintDoctor with a custom diagnostic strategy.
+    pub fn with_strategy(provider: Arc<dyn AiProvider>, strategy: DiagnosticStrategy) -> Self {
         Self {
+            prompt_builder: PromptBuilder::new(strategy.clone()),
             provider,
-            prompt_builder: PromptBuilder::new(),
             contradiction_detector: ContradictionDetector::new(),
             confidence_calibrator: ConfidenceCalibrator::new(),
             prioritizer: Prioritizer::new(),
             trust_validator: TrustValidator::new(),
+            strategy,
         }
     }
 
@@ -83,8 +92,8 @@ impl PrintDoctor {
         let request = AiRequest {
             system_prompt: pair.system,
             user_prompt: pair.user,
-            max_tokens: 1024,
-            temperature: 0.3,
+            max_tokens: self.strategy.max_tokens,
+            temperature: self.strategy.temperature,
         };
 
         let response = self.provider.complete(request).await.map_err(|e| {
@@ -244,6 +253,41 @@ pub enum DiagnoseError {
     MissingContext { printer_id: String },
     #[error("AI provider error: {0}")]
     ProviderError(String),
+}
+
+// ── Diagnostic Orchestrator ─────────────────────────────────────────
+
+/// Thin orchestration layer that selects a diagnostic strategy and
+/// delegates to PrintDoctor for the actual pipeline execution.
+///
+/// The orchestrator owns the strategy; PrintDoctor is created
+/// on-demand per diagnosis with the strategy's configuration.
+pub struct DiagnosticOrchestrator;
+
+impl DiagnosticOrchestrator {
+    /// Run a diagnostic with the standard (Phase 2.4) strategy.
+    pub async fn diagnose(
+        context: &PrinterContext,
+        provider: Arc<dyn AiProvider>,
+    ) -> Result<ValidatedRecommendation, DiagnoseError> {
+        Self::diagnose_with_strategy(context, provider, DiagnosticStrategy::STANDARD).await
+    }
+
+    /// Run a diagnostic with a specific strategy.
+    pub async fn diagnose_with_strategy(
+        context: &PrinterContext,
+        provider: Arc<dyn AiProvider>,
+        strategy: DiagnosticStrategy,
+    ) -> Result<ValidatedRecommendation, DiagnoseError> {
+        tracing::info!(
+            printer_id = %context.printer_id,
+            strategy = strategy.name,
+            max_tokens = strategy.max_tokens,
+            "diagnostic orchestrated"
+        );
+        let doctor = PrintDoctor::with_strategy(provider, strategy);
+        doctor.diagnose(context).await
+    }
 }
 
 // ── Tests ────────────────────────────────────────────────────────────

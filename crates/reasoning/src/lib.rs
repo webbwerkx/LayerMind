@@ -25,7 +25,9 @@ pub mod parser;
 pub mod prioritization;
 pub mod prompt;
 pub mod provider;
+pub mod strategy;
 pub mod trust;
 
-pub use diagnostic::PrintDoctor;
+pub use diagnostic::{DiagnosticOrchestrator, PrintDoctor};
 pub use provider::{AiProvider, AiRequest, AiResponse, TokenUsage};
+pub use strategy::{DiagnosticStrategy, ExplanationDetail, PromptVerbosity};

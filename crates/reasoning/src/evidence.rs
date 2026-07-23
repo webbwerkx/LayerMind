@@ -11,12 +11,9 @@
 //!
 //! Higher score = more relevant for AI diagnosis.
 
+use crate::strategy::DiagnosticStrategy;
 use chrono::Utc;
 use layermind_shared::context::{Evidence, IssueSummary, ObservationSummary, PrinterContext};
-
-const MAX_RANKED_EVIDENCE: usize = 15;
-const MAX_RANKED_ISSUES: usize = 10;
-const MAX_RANKED_OBSERVATIONS: usize = 10;
 
 /// Ranked collections for prompt injection.
 #[derive(Debug, Clone)]
@@ -50,12 +47,13 @@ pub struct ScoredObservation {
 }
 
 /// Ranks evidence, issues, and observations from a PrinterContext.
-#[derive(Debug, Default)]
-pub struct EvidenceRanker;
+pub struct EvidenceRanker {
+    strategy: DiagnosticStrategy,
+}
 
 impl EvidenceRanker {
-    pub fn new() -> Self {
-        Self
+    pub fn new(strategy: DiagnosticStrategy) -> Self {
+        Self { strategy }
     }
 
     /// Rank all evidence sources from the context. Returns top-N
@@ -71,9 +69,9 @@ impl EvidenceRanker {
         scored_issues.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
         scored_observations.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap());
 
-        scored_evidence.truncate(MAX_RANKED_EVIDENCE);
-        scored_issues.truncate(MAX_RANKED_ISSUES);
-        scored_observations.truncate(MAX_RANKED_OBSERVATIONS);
+        scored_evidence.truncate(self.strategy.max_evidence);
+        scored_issues.truncate(self.strategy.max_issues);
+        scored_observations.truncate(self.strategy.max_observations);
 
         RankedContext {
             evidence: scored_evidence,
@@ -203,10 +201,9 @@ mod tests {
         );
         let recent = Evidence::observed("temp", "recent reading", 0.9, Utc::now());
         let ctx = context_with_evidence(vec![old, recent]);
-        let ranker = EvidenceRanker::new();
+        let ranker = EvidenceRanker::new(DiagnosticStrategy::STANDARD);
         let ranked = ranker.rank(&ctx);
         assert_eq!(ranked.evidence.len(), 2);
-        // Recent should be first (higher score).
         assert!(ranked.evidence[0].score > ranked.evidence[1].score);
     }
 
@@ -215,7 +212,7 @@ mod tests {
         let low_conf = Evidence::observed("temp", "reading", 0.3, Utc::now());
         let high_conf = Evidence::observed("temp", "reading", 0.95, Utc::now());
         let ctx = context_with_evidence(vec![low_conf, high_conf]);
-        let ranker = EvidenceRanker::new();
+        let ranker = EvidenceRanker::new(DiagnosticStrategy::STANDARD);
         let ranked = ranker.rank(&ctx);
         assert!(ranked.evidence[0].score > ranked.evidence[1].score);
     }
@@ -223,7 +220,7 @@ mod tests {
     #[test]
     fn empty_context_produces_empty_rankings() {
         let ctx = context_with_evidence(Vec::new());
-        let ranker = EvidenceRanker::new();
+        let ranker = EvidenceRanker::new(DiagnosticStrategy::STANDARD);
         let ranked = ranker.rank(&ctx);
         assert!(ranked.evidence.is_empty());
         assert!(ranked.issues.is_empty());
@@ -232,12 +229,29 @@ mod tests {
 
     #[test]
     fn truncated_to_limits() {
-        let mut evidence: Vec<Evidence> = (0..25)
+        let evidence: Vec<Evidence> = (0..25)
             .map(|i| Evidence::observed("temp", &format!("reading {}", i), 0.5, Utc::now()))
             .collect();
-        let ctx = context_with_evidence(evidence.clone());
-        let ranker = EvidenceRanker::new();
+        let ctx = context_with_evidence(evidence);
+        let ranker = EvidenceRanker::new(DiagnosticStrategy::STANDARD);
         let ranked = ranker.rank(&ctx);
-        assert_eq!(ranked.evidence.len(), MAX_RANKED_EVIDENCE);
+        assert_eq!(
+            ranked.evidence.len(),
+            DiagnosticStrategy::STANDARD.max_evidence
+        );
+    }
+
+    #[test]
+    fn rapid_strategy_limits_are_smaller() {
+        let evidence: Vec<Evidence> = (0..30)
+            .map(|i| Evidence::observed("temp", &format!("reading {}", i), 0.5, Utc::now()))
+            .collect();
+        let ctx = context_with_evidence(evidence);
+        let ranker = EvidenceRanker::new(DiagnosticStrategy::RAPID);
+        let ranked = ranker.rank(&ctx);
+        assert_eq!(
+            ranked.evidence.len(),
+            DiagnosticStrategy::RAPID.max_evidence
+        );
     }
 }

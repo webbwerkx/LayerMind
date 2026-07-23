@@ -814,4 +814,72 @@ mod tests {
             assert!(factor.weight > 0.0);
         }
     }
+
+    // ── Phase 2.5: Diagnostic strategies ───────────────────────
+
+    use layermind_reasoning::DiagnosticOrchestrator;
+    use layermind_reasoning::DiagnosticStrategy;
+
+    #[tokio::test]
+    async fn rapid_strategy_completes() {
+        let store = ContextStore::new();
+        seed_profile(&store, "printer-rapid");
+
+        let mock = MockProvider::new("mock", "mock", mock_healthy_json());
+        let provider = Arc::new(mock);
+
+        let ctx = store.context("printer-rapid").unwrap();
+        let result = DiagnosticOrchestrator::diagnose_with_strategy(
+            &ctx,
+            provider,
+            DiagnosticStrategy::RAPID,
+        )
+        .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn thorough_strategy_completes() {
+        let store = ContextStore::new();
+        seed_profile(&store, "printer-thorough");
+
+        let mock = MockProvider::new("mock", "mock", mock_multi_issue_response());
+        let provider = Arc::new(mock);
+
+        let ctx = store.context("printer-thorough").unwrap();
+        let result = DiagnosticOrchestrator::diagnose_with_strategy(
+            &ctx,
+            provider,
+            DiagnosticStrategy::THOROUGH,
+        )
+        .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn standard_default_preserves_behavior() {
+        let store = ContextStore::new();
+        seed_profile(&store, "printer-std");
+
+        let mock = MockProvider::new("mock", "mock", mock_healthy_json());
+        let doctor = PrintDoctor::new(Arc::new(mock));
+
+        let result = diagnose_printer(&store, &doctor, "printer-std").await;
+        assert!(result.is_ok());
+        assert!(!result.unwrap().recommendation.actions.is_empty());
+    }
+
+    #[tokio::test]
+    async fn orchestrator_default_strategy_works() {
+        let store = ContextStore::new();
+        seed_profile(&store, "printer-orch");
+
+        let mock = MockProvider::new("mock", "mock-gpt4", mock_healthy_json());
+        let provider = Arc::new(mock);
+
+        let ctx = store.context("printer-orch").unwrap();
+        let result = DiagnosticOrchestrator::diagnose(&ctx, provider).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().recommendation.usage.provider, "mock");
+    }
 }
