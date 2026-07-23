@@ -15,6 +15,7 @@ members = [
     "crates/machine",
     "crates/reasoning",
     "crates/core",
+    "apps/layermind",
 ]
 resolver = "2"
 
