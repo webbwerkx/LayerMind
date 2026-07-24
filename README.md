@@ -4,34 +4,51 @@
   <img src="https://img.shields.io/github/last-commit/webbwerkx/LayerMind?style=flat-square&color=teal" alt="Last Commit">
   <img src="https://img.shields.io/badge/tests-241_passing-2ea44f?style=flat-square" alt="Tests">
   <img src="https://img.shields.io/badge/status-phase_5b-blue?style=flat-square" alt="Status">
+  <img src="https://img.shields.io/badge/built_with-Rust-000000?style=flat-square&logo=rust" alt="Built with Rust">
 </p>
 
 <br>
 
-<pre align="center">
-██╗     █████╗ ██╗   ██╗ ███████╗██████╗ ███╗  ███╗██╗███╗   ██╗██████╗
-██║     ██╔══██╗╚██╗ ██╔╝██╔════╝██╔══██╗████╗ ████║██║████╗  ██║██╔══██╗
-██║     ███████║ ╚████╔╝ █████╗  ██████╔╝██╔████╔██║██║██╔██╗ ██║██║  ██║
-██║     ██╔══██║  ╚██╔╝  ██╔══╝  ██╔══██╗██║╚██╔╝██║██║██║╚██╗██║██║  ██║
-███████╗██║  ██║   ██║   ███████╗██║  ██║██║ ╚═╝ ██║██║██║ ╚████║██████╔╝
-╚══════╝╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚═════╝
-</pre>
-
-<p align="center">
-  <strong>AI-powered intelligence layer for 3D printing</strong><br>
-  <em>Your printer gets smarter every time it prints.</em>
-</p>
+<div align="center">
+  <h1>
+    <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=40&duration=4000&pause=100&color=00C8D7&center=true&width=600&height=70&lines=LAYERMIND" alt="LAYERMIND">
+  </h1>
+  <table>
+    <tr>
+      <td align="center"><strong><span style="font-size: 1.2em">AI-powered intelligence layer for 3D printing</span></strong></td>
+    </tr>
+    <tr>
+      <td align="center"><em>Your printer gets smarter every time it prints.</em></td>
+    </tr>
+  </table>
+</div>
 
 <br>
 
-<p align="center">
-  <a href="#-features">Features</a> •
-  <a href="#-quick-start">Quick Start</a> •
-  <a href="#-architecture">Architecture</a> •
-  <a href="#-terminal-ui">Terminal UI</a> •
-  <a href="#-commands">Commands</a> •
-  <a href="#-development">Development</a>
-</p>
+<div align="center">
+  <table>
+    <tr>
+      <td align="center" width="200">
+        <a href="#-features">Features</a>
+      </td>
+      <td align="center" width="200">
+        <a href="#-quick-start">Quick Start</a>
+      </td>
+      <td align="center" width="200">
+        <a href="#-architecture">Architecture</a>
+      </td>
+      <td align="center" width="200">
+        <a href="#-terminal-ui">Terminal UI</a>
+      </td>
+      <td align="center" width="200">
+        <a href="#-commands">Commands</a>
+      </td>
+      <td align="center" width="200">
+        <a href="#-development">Development</a>
+      </td>
+    </tr>
+  </table>
+</div>
 
 <br>
 
