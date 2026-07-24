@@ -119,32 +119,54 @@ layermind-tui
 ## ✦ Terminal UI
 
 ```
-┌─ LAYERMIND ◆ voron-0 ◆ PRINTING ──────── 02:34:12  142/300 ─┐
-│ ┌─ STATE ───────────────┐ ┌─ TEMPERATURES ─────────────────┐  │
-│ │  Host:     voron-0    │ │  Extruder   235°C / 240°C       │  │
-│ │  Status:   PRINTING   │ │  ████████████████░░░░░░░░░░░░░░░ │  │
-│ │  Print:    benchy     │ │  Bed        105°C / 110°C       │  │
-│ │  Progress: 47.3%      │ │  ████████████████████████████████ │  │
-│ │  Position: X125.0     │ └─────────────────────────────────┘  │
-│ │           Y150.0      │ ┌─ PROGRESS ───────────────────────┐ │
-│ │           Z200.0      │ │  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░ │ │
-│ │  Speed:    80 mm/s    │ │  47.3%   Layer 142/300           │ │
-│ └───────────────────────┘ └─────────────────────────────────┘  │
-│ ┌─ EVENTS ──────────────────────┐ ┌─ DIAGNOSTICS ─────────────┐│
-│ │  ◆ Connected to Moonraker     │ │  Press d to run AI        ││
-│ │  ◆ Print started: benchy.gcode│ │  diagnostic               ││
-│ │  ⚠ PID deviation detected     │ └──────────────────────────┘│
-│ └───────────────────────────────┘                              │
-├─ q:quit │ d:diagnose │ m:machine │ TAB:focus ──────────────────┤
-└────────────────────────────────────────────────────────────────┘
+╭────────────────────────────────────────────────────────────────────╮
+│  ◉ LAYERMIND ◆ voron-0 ◆ PRINTING ═══ 02:34:12 ══ Layer 142/300  │
+├────────────────────────────────────────────────────────────────────┤
+│ ┌ STATE ──────────────────┐ ┌ TEMPERATURES ─────────────────────┐ │
+│ │  Host:     voron-0      │ │  Extruder   235°C / 240°C         │ │
+│ │  Status:   PRINTING     │ │  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░ │ │
+│ │  Print:    benchy       │ │  Bed        105°C / 110°C         │ │
+│ │  Progress: 47.3%        │ │  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ │ │
+│ │  Position: X125.0       │ └───────────────────────────────────┘ │
+│ │           Y150.0        │ ┌ PROGRESS ─────────────────────────┐ │
+│ │           Z200.0        │ │  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░ │ │
+│ │  Speed:    80 mm/s      │ │  47.3%   Layer 142/300           │ │
+│ └─────────────────────────┘ │  ETA 00:42:15                    │ │
+│ ┌ EVENTS ───────────────────┘ └────────────────────────────────┘ │
+│ │  ● Connected to Moonraker          ┌ DIAGNOSTICS ────────────┐ │
+│ │  ● Print started: benchy.gcode     │  Press d to run AI      │ │
+│ │  ▲ PID deviation detected          │  diagnostic              │ │
+│ │  ✖ Print failed: thermal runaway   │                         │ │
+│ └────────────────────────────────────└─────────────────────────┘ │
+├────────────────────────────────────────────────────────────────────┤
+│  q:quit │ d:diagnose │ m:machine info │ TAB:cycle focus           │
+╰────────────────────────────────────────────────────────────────────╯
 ```
 
-| Key | Action | Key | Action |
-|-----|--------|-----|--------|
-| `q` | Quit | `Tab` | Cycle focus panel |
-| `d` | Run AI diagnostic | `↑` | Scroll events up |
-| `m` | Open machine info popup | `↓` | Scroll events down |
-| `M` | Close machine info popup | — | — |
+<div align="center">
+
+### Panel Reference
+
+| Panel | Shows |
+|:------|:------|
+| **STATE** | Hostname, print status, filename, progress %, position, speed |
+| **TEMPERATURES** | Extruder & bed temps with live gauge bars |
+| **PROGRESS** | Print progress bar, layer counter, estimated time remaining |
+| **EVENTS** | Connection, print lifecycle, warnings, errors (auto-scroll) |
+| **DIAGNOSTICS** | AI diagnostic results or "Press d" prompt |
+
+<br>
+
+### Keyboard Controls
+
+| Key | Action | | Key | Action |
+|:---:|:-------|---|:---:|:-------|
+| `q` | Quit | | `Tab` | Cycle focus (→ Temps → Events → Recs) |
+| `d` | Run AI diagnostic | | `↑` | Scroll events panel up |
+| `m` | Open machine info popup | | `↓` | Scroll events panel down |
+| `M` | Close machine info popup | | | |
+
+</div>
 
 <br>
 
