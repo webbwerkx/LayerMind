@@ -1,0 +1,100 @@
+<svg viewBox="0 0 700 120" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="filament-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00C8D7" stop-opacity="0.0"/>
+      <stop offset="20%" stop-color="#00C8D7" stop-opacity="0.0"/>
+      <stop offset="100%" stop-color="#00C8D7" stop-opacity="1"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <clipPath id="text-reveal">
+      <rect x="0" y="0" width="0" height="120">
+        <animate attributeName="width" from="0" to="700" dur="3s" begin="0.5s" fill="freeze"/>
+      </rect>
+    </clipPath>
+    <clipPath id="filament-clip">
+      <rect x="0" y="0" width="0" height="120">
+        <animate attributeName="width" from="0" to="700" dur="3s" begin="0.5s" fill="freeze"/>
+      </rect>
+    </clipPath>
+  </defs>
+
+  <!-- Background glow -->
+  <ellipse cx="350" cy="55" rx="320" ry="45" fill="#00C8D7" opacity="0.03">
+    <animate attributeName="opacity" from="0" to="0.03" dur="1s" begin="1s" fill="freeze"/>
+  </ellipse>
+
+  <!-- Nozzle + extruder group -->
+  <g filter="url(#glow)">
+    <animateTransform attributeName="transform" type="translate" from="-600,0" to="0,0" dur="3.5s" begin="0s" fill="freeze"/>
+    
+    <!-- Filament spool (top) -->
+    <rect x="42" y="8" width="36" height="18" rx="3" fill="#333" stroke="#555" stroke-width="1"/>
+    <rect x="48" y="11" width="24" height="12" rx="1" fill="#222"/>
+    <line x1="50" y1="14" x2="70" y2="14" stroke="#00C8D7" stroke-width="1.5" opacity="0.5"/>
+    <line x1="50" y1="17" x2="70" y2="17" stroke="#00C8D7" stroke-width="1.5" opacity="0.5"/>
+    <line x1="50" y1="20" x2="70" y2="20" stroke="#00C8D7" stroke-width="1.5" opacity="0.5"/>
+
+    <!-- Extruder body -->
+    <rect x="30" y="26" width="60" height="16" rx="2" fill="#444" stroke="#666" stroke-width="1"/>
+    <rect x="35" y="28" width="10" height="12" rx="1" fill="#E8442A"/> <!-- red accent -->
+    <rect x="48" y="28" width="24" height="12" rx="1" fill="#2A2E33"/>
+    <circle cx="60" cy="34" r="3" fill="#555"/>
+
+    <!-- Heat sink fins -->
+    <rect x="30" y="42" width="60" height="2" fill="#666"/>
+    <rect x="30" y="46" width="60" height="2" fill="#666"/>
+    <rect x="30" y="50" width="60" height="2" fill="#666"/>
+
+    <!-- Heater block -->
+    <rect x="38" y="54" width="44" height="12" rx="1" fill="#E8442A" opacity="0.8"/>
+    <rect x="38" y="66" width="44" height="4" fill="#C0392B" opacity="0.6"/>
+
+    <!-- Nozzle tip -->
+    <polygon points="50,70 70,70 65,80 55,80" fill="#777"/>
+    <polygon points="53,80 67,80 63,86 57,86" fill="#555"/>
+    <circle cx="60" cy="88" r="1.5" fill="#00C8D7">
+      <animate attributeName="r" values="1.5;0.5;1.5" dur="0.4s" repeatCount="indefinite"/>
+    </circle>
+  </g>
+
+  <!-- Filament trail (extruded line behind nozzle) -->
+  <g clip-path="url(#filament-clip)">
+    <line x1="60" y1="88" x2="700" y2="88" stroke="#00C8D7" stroke-width="3" stroke-linecap="round" opacity="0.7"/>
+    <line x1="60" y1="86" x2="700" y2="86" stroke="#00C8D7" stroke-width="1" stroke-linecap="round" opacity="0.3"/>
+    <!-- Filament beads -->
+    <circle cx="100" cy="88" r="1.5" fill="#00C8D7" opacity="0.6"/>
+    <circle cx="150" cy="88" r="2" fill="#00C8D7" opacity="0.5"/>
+    <circle cx="200" cy="88" r="1.5" fill="#00C8D7" opacity="0.6"/>
+    <circle cx="250" cy="88" r="2" fill="#00C8D7" opacity="0.5"/>
+    <circle cx="300" cy="88" r="1.5" fill="#00C8D7" opacity="0.6"/>
+    <circle cx="350" cy="88" r="2" fill="#00C8D7" opacity="0.4"/>
+    <circle cx="400" cy="88" r="1.5" fill="#00C8D7" opacity="0.5"/>
+    <circle cx="450" cy="88" r="2" fill="#00C8D7" opacity="0.4"/>
+    <circle cx="500" cy="88" r="1.5" fill="#00C8D7" opacity="0.5"/>
+    <circle cx="550" cy="88" r="2" fill="#00C8D7" opacity="0.4"/>
+    <circle cx="600" cy="88" r="1.5" fill="#00C8D7" opacity="0.4"/>
+    <circle cx="650" cy="88" r="2" fill="#00C8D7" opacity="0.3"/>
+  </g>
+
+  <!-- LAYERMIND text (revealed by clipPath as nozzle moves) -->
+  <text x="50" y="52" font-family="'Courier New', 'Consolas', monospace" font-size="52" font-weight="900" fill="#00C8D7" letter-spacing="6" clip-path="url(#text-reveal)">
+    LAYERMIND
+  </text>
+
+  <!-- Text underline glow -->
+  <line x1="50" y1="60" x2="650" y2="60" stroke="#00C8D7" stroke-width="1" opacity="0" stroke-linecap="round">
+    <animate attributeName="opacity" from="0" to="0.3" dur="0.5s" begin="3.5s" fill="freeze"/>
+  </line>
+
+  <!-- Subtitle -->
+  <text x="350" y="110" font-family="sans-serif" font-size="13" fill="#C0C5D0" text-anchor="middle" letter-spacing="2" opacity="0">
+    AI-POWERED INTELLIGENCE LAYER FOR 3D PRINTING
+    <animate attributeName="opacity" from="0" to="1" dur="0.8s" begin="3.5s" fill="freeze"/>
+  </text>
+</svg>

@@ -1,26 +1,16 @@
-<p align="center">
-  <img src="https://img.shields.io/badge/rust-1.85+-orange?style=flat-square&logo=rust" alt="Rust">
-  <img src="https://img.shields.io/badge/license-proprietary-red?style=flat-square" alt="License">
-  <img src="https://img.shields.io/github/last-commit/webbwerkx/LayerMind?style=flat-square&color=teal" alt="Last Commit">
-  <img src="https://img.shields.io/badge/tests-241_passing-2ea44f?style=flat-square" alt="Tests">
-  <img src="https://img.shields.io/badge/status-phase_5b-blue?style=flat-square" alt="Status">
-  <img src="https://img.shields.io/badge/built_with-Rust-000000?style=flat-square&logo=rust" alt="Built with Rust">
-</p>
+<div align="center">
+  <img src="assets/header.svg" alt="LAYERMIND" width="700">
+</div>
 
 <br>
 
 <div align="center">
-  <h1>
-    <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=40&duration=4000&pause=100&color=00C8D7&center=true&width=600&height=70&lines=LAYERMIND" alt="LAYERMIND">
-  </h1>
-  <table>
-    <tr>
-      <td align="center"><strong><span style="font-size: 1.2em">AI-powered intelligence layer for 3D printing</span></strong></td>
-    </tr>
-    <tr>
-      <td align="center"><em>Your printer gets smarter every time it prints.</em></td>
-    </tr>
-  </table>
+  <img src="https://img.shields.io/badge/rust-1.85+-orange?style=for-the-badge&logo=rust" alt="Rust">
+  <img src="https://img.shields.io/badge/license-proprietary-red?style=for-the-badge" alt="License">
+  <img src="https://img.shields.io/github/last-commit/webbwerkx/LayerMind?style=for-the-badge&color=teal" alt="Last Commit">
+  <img src="https://img.shields.io/badge/tests-241_passing-2ea44f?style=for-the-badge" alt="Tests">
+  <img src="https://img.shields.io/badge/status-phase_5b-blue?style=for-the-badge" alt="Status">
+  <img src="https://img.shields.io/badge/built_with-Rust-000000?style=for-the-badge&logo=rust" alt="Built with Rust">
 </div>
 
 <br>
