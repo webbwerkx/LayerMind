@@ -6,20 +6,32 @@
   <img src="https://img.shields.io/badge/status-phase_5b-blue?style=flat-square" alt="Status">
 </p>
 
-<div align="center">
-  <h1>✦ LayerMind ✦</h1>
-  <p><strong>AI-powered intelligence layer for 3D printing</strong></p>
-  <p><em>Your printer gets smarter every time it prints.</em></p>
-  <br>
-  <p>
-    <a href="#-features">Features</a> •
-    <a href="#-quick-start">Quick Start</a> •
-    <a href="#-architecture">Architecture</a> •
-    <a href="#-terminal-ui">Terminal UI</a> •
-    <a href="#-commands">Commands</a> •
-    <a href="#-development">Development</a>
-  </p>
-</div>
+<br>
+
+<pre align="center">
+██╗     █████╗ ██╗   ██╗███████╗██████╗ ███╗   ███╗██╗███╗   ██╗██████╗
+██║     ██╔══██╗╚██╗ ██╔╝██╔════╝██╔══██╗████╗ ████║██║████╗  ██║██╔══██╗
+██║     ███████║ ╚████╔╝ █████╗  ██████╔╝██╔████╔██║██║██╔██╗ ██║██║  ██║
+██║     ██╔══██║  ╚██╔╝  ██╔══╝  ██╔══██╗██║╚██╔╝██║██║██║╚██╗██║██║  ██║
+███████╗██║  ██║   ██║   ███████╗██║  ██║██║ ╚═╝ ██║██║██║ ╚████║██████╔╝
+╚══════╝╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝╚═════╝
+</pre>
+
+<p align="center">
+  <strong>AI-powered intelligence layer for 3D printing</strong><br>
+  <em>Your printer gets smarter every time it prints.</em>
+</p>
+
+<br>
+
+<p align="center">
+  <a href="#-features">Features</a> •
+  <a href="#-quick-start">Quick Start</a> •
+  <a href="#-architecture">Architecture</a> •
+  <a href="#-terminal-ui">Terminal UI</a> •
+  <a href="#-commands">Commands</a> •
+  <a href="#-development">Development</a>
+</p>
 
 <br>
 
@@ -119,28 +131,28 @@ layermind-tui
 ## ✦ Terminal UI
 
 ```
-╭────────────────────────────────────────────────────────────────────╮
-│  ◉ LAYERMIND ◆ voron-0 ◆ PRINTING ═══ 02:34:12 ══ Layer 142/300  │
-├────────────────────────────────────────────────────────────────────┤
-│ ┌ STATE ──────────────────┐ ┌ TEMPERATURES ─────────────────────┐ │
-│ │  Host:     voron-0      │ │  Extruder   235°C / 240°C         │ │
-│ │  Status:   PRINTING     │ │  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░ │ │
-│ │  Print:    benchy       │ │  Bed        105°C / 110°C         │ │
-│ │  Progress: 47.3%        │ │  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓ │ │
-│ │  Position: X125.0       │ └───────────────────────────────────┘ │
-│ │           Y150.0        │ ┌ PROGRESS ─────────────────────────┐ │
-│ │           Z200.0        │ │  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░ │ │
-│ │  Speed:    80 mm/s      │ │  47.3%   Layer 142/300           │ │
-│ └─────────────────────────┘ │  ETA 00:42:15                    │ │
-│ ┌ EVENTS ───────────────────┘ └────────────────────────────────┘ │
-│ │  ● Connected to Moonraker          ┌ DIAGNOSTICS ────────────┐ │
-│ │  ● Print started: benchy.gcode     │  Press d to run AI      │ │
-│ │  ▲ PID deviation detected          │  diagnostic              │ │
-│ │  ✖ Print failed: thermal runaway   │                         │ │
-│ └────────────────────────────────────└─────────────────────────┘ │
-├────────────────────────────────────────────────────────────────────┤
-│  q:quit │ d:diagnose │ m:machine info │ TAB:cycle focus           │
-╰────────────────────────────────────────────────────────────────────╯
+╭──────────────────────────────────────────────────────────────────────╮
+│  ◉ LAYERMIND  ◆  voron-0  ◆  PRINTING  ◆  02:34:12  ◆  Layer 142/300 │
+├──────────────────────────────────────────────────────────────────────┤
+│ ┌ STATE ─────────────────┐ ┌ TEMPERATURES ────────────────────────┐ │
+│ │  Host:     voron-0     │ │  Extruder   235°C / 240°C            │ │
+│ │  Status:   PRINTING    │ │  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░░  │ │
+│ │  Print:    benchy      │ │  Bed        105°C / 110°C            │ │
+│ │  Progress: 47.3%       │ │  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  │ │
+│ │  Position: X125.0      │ └──────────────────────────────────────┘ │
+│ │           Y150.0       │ ┌ PROGRESS ────────────────────────────┐ │
+│ │           Z200.0       │ │  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░  │ │
+│ │  Speed:    80 mm/s     │ │  47.3%   Layer 142/300  ETA 00:42:15 │ │
+│ └────────────────────────┘ └──────────────────────────────────────┘ │
+│ ┌ EVENTS ─────────────────────────────────────────────────────────┐ │
+│ │  ● Connected to Moonraker        ┌ DIAGNOSTICS ───────────────┐ │ │
+│ │  ● Print started: benchy.gcode   │  Press d to run AI         │ │ │
+│ │  ▲ PID deviation detected        │  diagnostic                 │ │ │
+│ │  ✖ Print failed: thermal runaway │                             │ │ │
+│ └───────────────────────────────────└────────────────────────────┘ │
+├──────────────────────────────────────────────────────────────────────┤
+│  q:quit  │  d:diagnose  │  m:machine info  │  TAB:cycle focus       │
+╰──────────────────────────────────────────────────────────────────────╯
 ```
 
 <div align="center">
