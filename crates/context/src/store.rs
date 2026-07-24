@@ -9,7 +9,7 @@
 //! the data is. Consumers never see the engine; they only query the store.
 
 use std::collections::HashMap;
-use std::sync::RwLock;
+use std::sync::{PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use chrono::Utc;
 use layermind_shared::context::{
@@ -136,6 +136,22 @@ pub struct ContextStore {
 }
 
 impl ContextStore {
+    // ── Lock helpers ────────────────────────────────────────────
+
+    fn read_guard(&self) -> RwLockReadGuard<'_, HashMap<String, CachedContext>> {
+        self.contexts.read().unwrap_or_else(|e: PoisonError<_>| {
+            tracing::error!("ContextStore RwLock read poisoned, recovering");
+            e.into_inner()
+        })
+    }
+
+    fn write_guard(&self) -> RwLockWriteGuard<'_, HashMap<String, CachedContext>> {
+        self.contexts.write().unwrap_or_else(|e: PoisonError<_>| {
+            tracing::error!("ContextStore RwLock write poisoned, recovering");
+            e.into_inner()
+        })
+    }
+
     pub fn new() -> Self {
         Self {
             contexts: RwLock::new(HashMap::new()),
@@ -149,7 +165,7 @@ impl ContextStore {
         change: RecentChange,
         category: &layermind_shared::history::TimelineCategory,
     ) {
-        let mut contexts = self.contexts.write().expect("ContextStore RwLock poisoned");
+        let mut contexts = self.write_guard();
         let cached = contexts
             .entry(printer_id.into())
             .or_insert_with(|| CachedContext::new(printer_id.into()));
@@ -173,7 +189,7 @@ impl ContextStore {
 
     /// Record a calibration event timestamp.
     pub fn record_calibration(&self, printer_id: &str) {
-        let mut contexts = self.contexts.write().expect("ContextStore RwLock poisoned");
+        let mut contexts = self.write_guard();
         let cached = contexts
             .entry(printer_id.into())
             .or_insert_with(|| CachedContext::new(printer_id.into()));
@@ -182,7 +198,7 @@ impl ContextStore {
 
     /// Record a maintenance event timestamp.
     pub fn record_maintenance(&self, printer_id: &str) {
-        let mut contexts = self.contexts.write().expect("ContextStore RwLock poisoned");
+        let mut contexts = self.write_guard();
         let cached = contexts
             .entry(printer_id.into())
             .or_insert_with(|| CachedContext::new(printer_id.into()));
@@ -191,7 +207,7 @@ impl ContextStore {
 
     /// Update the learning summary for a printer.
     pub fn set_learning(&self, printer_id: &str, summary: BehaviorSummary) {
-        let mut contexts = self.contexts.write().expect("ContextStore RwLock poisoned");
+        let mut contexts = self.write_guard();
         if let Some(cached) = contexts.get_mut(printer_id) {
             cached.learning = Some(summary);
         } else {
@@ -203,7 +219,7 @@ impl ContextStore {
 
     /// Inject machine intelligence data into a printer's context.
     pub fn set_machine(&self, printer_id: &str, profile: MachineProfile) {
-        let mut contexts = self.contexts.write().expect("ContextStore RwLock poisoned");
+        let mut contexts = self.write_guard();
         if let Some(cached) = contexts.get_mut(printer_id) {
             cached.machine = Some(profile);
         } else {
@@ -215,7 +231,7 @@ impl ContextStore {
 
     /// Produce the current context for a printer.
     pub fn context(&self, printer_id: &str) -> Option<PrinterContext> {
-        let contexts = self.contexts.read().expect("ContextStore RwLock poisoned");
+        let contexts = self.read_guard();
         let cached = contexts.get(printer_id)?;
 
         let health = HealthSummary {
@@ -296,10 +312,7 @@ impl ContextStore {
 
     /// Return the number of printers with cached context.
     pub fn printer_count(&self) -> usize {
-        self.contexts
-            .read()
-            .expect("ContextStore RwLock poisoned")
-            .len()
+        self.read_guard().len()
     }
 
     /// Update the cache from an incoming knowledge record.
@@ -308,7 +321,7 @@ impl ContextStore {
     /// lock is held only for the duration of the HashMap + field
     /// mutations — microseconds even for large profiles.
     pub fn update(&self, knowledge: Knowledge) {
-        let mut contexts = self.contexts.write().expect("ContextStore RwLock poisoned");
+        let mut contexts = self.write_guard();
 
         let cached = contexts
             .entry(knowledge.printer_id.clone())

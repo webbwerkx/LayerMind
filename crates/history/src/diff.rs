@@ -55,7 +55,7 @@ impl SnapshotDiffEngine {
         from: &MachineIdentity,
         to: &MachineIdentity,
     ) {
-        if let (Some(ref a), Some(ref b)) = (&from.manufacturer, &to.manufacturer) {
+        if let (Some(a), Some(b)) = (&from.manufacturer, &to.manufacturer) {
             if a.value != b.value {
                 changes.push(SnapshotChange {
                     path: "identity.manufacturer".into(),

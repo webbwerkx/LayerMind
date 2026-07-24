@@ -79,8 +79,8 @@ impl FailurePredictor {
             let change_count = events
                 .iter()
                 .filter(|e| {
-                    matches!(&e.kind, TimelineEventKind::Hardware(ref hw) if hw.component_id == comp_id)
-                        || matches!(&e.kind, TimelineEventKind::Maintenance(ref m) if m.component == comp_id)
+                    matches!(&e.kind, TimelineEventKind::Hardware(hw) if hw.component_id == comp_id)
+                        || matches!(&e.kind, TimelineEventKind::Maintenance(m) if m.component == comp_id)
                 })
                 .count() as u64;
 

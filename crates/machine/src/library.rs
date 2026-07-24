@@ -36,6 +36,20 @@ impl HardwareLibrary {
             .collect()
     }
 
+    /// Try to match a component name and set its `known_profile`.
+    /// Returns the matched profile name if any.
+    pub fn match_component<'a>(&self, name: &str, known_profile: &'a mut Option<String>) -> Option<&'a str> {
+        if known_profile.is_some() {
+            return known_profile.as_deref();
+        }
+        if let Some(profile) = self.find(name).first() {
+            *known_profile = Some(profile.name.clone());
+            known_profile.as_deref()
+        } else {
+            None
+        }
+    }
+
     /// Return all profiles for a given category.
     pub fn by_category(&self, category: HardwareCategory) -> Vec<&HardwareProfile> {
         self.profiles

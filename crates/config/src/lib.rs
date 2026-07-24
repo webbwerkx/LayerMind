@@ -127,6 +127,9 @@ impl Config {
         if let Ok(url) = std::env::var("LAYERMIND_MOONRAKER_URL") {
             config.moonraker.url = url;
         }
+        if let Ok(key) = std::env::var("LAYERMIND_MOONRAKER_API_KEY") {
+            config.moonraker.api_key = Some(key);
+        }
         if let Ok(url) = std::env::var("LAYERMIND_DATABASE_URL") {
             config.database.url = url;
         }

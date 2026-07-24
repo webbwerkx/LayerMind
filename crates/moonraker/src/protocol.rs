@@ -126,6 +126,11 @@ pub fn server_info_request(id: u64) -> RpcRequest {
     RpcRequest::new("server.info", None, id)
 }
 
+/// Build a `printer.info` request to get printer firmware and state info.
+pub fn printer_info_request(id: u64) -> RpcRequest {
+    RpcRequest::new("printer.info", None, id)
+}
+
 // ── Moonraker Printer Object Status ───────────────────────────────────
 
 /// The parsed status response from a `notify_status_update` notification.

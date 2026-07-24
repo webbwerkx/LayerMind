@@ -11,14 +11,21 @@
 //! Pipeline: Moonraker → Printer → Telemetry → Analyzer → Knowledge
 //!   → ContextStore → PrintDoctor → ValidatedRecommendation
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use layermind_config::Config;
+use layermind_history::TimelineStore;
+use layermind_learning::LearningEngine;
 use layermind_reasoning::diagnostic::{DiagnoseError, PrintDoctor};
+use layermind_shared::event::Envelope;
+use layermind_shared::history::{RecentChange, TimelineCategory};
 use layermind_shared::recommendation::ValidatedRecommendation;
 use layermind_shared::sink::Sink;
 use tokio::signal;
 use tokio::sync::{broadcast, watch};
+
+/// Default interval (seconds) between learning analysis runs.
+const LEARNING_ANALYSIS_INTERVAL_SECS: u64 = 60;
 
 /// Run the LayerMind daemon.
 pub async fn run() -> layermind_shared::error::Result<()> {
@@ -99,8 +106,6 @@ async fn run_pipeline(config: &Config) -> layermind_shared::error::Result<()> {
         config.moonraker.url.clone(), // printer ID is the Moonraker URL for now
         "Default Printer".into(),
     );
-    let _printer_tx = printer.sender();
-
     tracing::info!(printer_id = %printer.id(), "printer instance created");
 
     // ── Moonraker client ─────────────────────────────────────────
@@ -170,8 +175,6 @@ async fn run_pipeline(config: &Config) -> layermind_shared::error::Result<()> {
 
     // ── Context engine ─────────────────────────────────────────
     let context_rx = knowledge_rx.resubscribe();
-    // Held for Phase 2.2 — PrintDoctor queries this store.
-    #[allow(unused)]
     let context_store = Arc::new(layermind_context::ContextStore::new());
     let context_engine =
         layermind_context::ContextEngine::new(context_rx, Arc::clone(&context_store));
@@ -182,6 +185,44 @@ async fn run_pipeline(config: &Config) -> layermind_shared::error::Result<()> {
     };
 
     tracing::info!("context engine started");
+
+    // ── Learning timeline store ─────────────────────────────────
+    let timeline_store = Arc::new(Mutex::new(TimelineStore::new()));
+
+    // ── Periodic learning analysis loop ─────────────────────────
+    let analysis_shutdown = shutdown_tx.subscribe();
+    let analysis_store = Arc::clone(&context_store);
+    let analysis_timeline = Arc::clone(&timeline_store);
+    let analysis_task = {
+        tokio::spawn(async move {
+            run_analysis_loop(
+                analysis_store,
+                analysis_timeline,
+                analysis_shutdown,
+                LEARNING_ANALYSIS_INTERVAL_SECS,
+            )
+            .await;
+        })
+    };
+
+    tracing::info!(
+        interval_secs = LEARNING_ANALYSIS_INTERVAL_SECS,
+        "learning analysis loop started"
+    );
+
+    // ── History bridge (telemetry → timeline) ───────────────────
+    let history_bridge_shutdown = shutdown_tx.subscribe();
+    let history_rx = printer_tx_for_analyzer.subscribe();
+    let history_store = Arc::clone(&timeline_store);
+    let history_context = Arc::clone(&context_store);
+    let history_task = {
+        tokio::spawn(async move {
+            run_history_bridge(history_rx, history_store, history_context, history_bridge_shutdown)
+                .await;
+        })
+    };
+
+    tracing::info!("history bridge started");
 
     // ── Wire printer → Moonraker normalizer ──────────────────────
     let printer_task = {
@@ -197,6 +238,55 @@ async fn run_pipeline(config: &Config) -> layermind_shared::error::Result<()> {
             if let Err(e) = moonraker.run(moonraker_shutdown2).await {
                 tracing::error!(error = %e, "Moonraker client failed");
             }
+        })
+    };
+
+    // ── Machine profile discovery ────────────────────────────────
+    // One-shot: query Moonraker for hardware info and build the
+    // machine profile. Runs after a brief delay so Moonraker can
+    // establish its connection.
+    let machine_config = config.moonraker.clone();
+    let machine_context = Arc::clone(&context_store);
+    let mut machine_shutdown = shutdown_tx.subscribe();
+    let machine_task = {
+        tokio::spawn(async move {
+            // Wait for Moonraker to connect.
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+            match layermind_moonraker::client::query_hardware_info(&machine_config).await {
+                Ok((printer_info, system_info, printer_objects)) => {
+                    let builder = layermind_machine::MachineProfileBuilder::new();
+                    let profile = builder.build(
+                        &machine_config.url,
+                        Some(&printer_info),
+                        Some(&system_info),
+                        Some(&printer_objects),
+                    );
+                    machine_context.set_machine(&machine_config.url, profile);
+                    tracing::info!("machine profile discovered and stored");
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "machine profile discovery failed, will retry");
+                    // Retry once after a delay.
+                    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                    if let Ok((printer_info, system_info, printer_objects)) =
+                        layermind_moonraker::client::query_hardware_info(&machine_config).await
+                    {
+                        let builder = layermind_machine::MachineProfileBuilder::new();
+                        let profile = builder.build(
+                            &machine_config.url,
+                            Some(&printer_info),
+                            Some(&system_info),
+                            Some(&printer_objects),
+                        );
+                        machine_context.set_machine(&machine_config.url, profile);
+                        tracing::info!("machine profile discovered and stored (retry)");
+                    }
+                }
+            }
+
+            // Wait for shutdown signal.
+            let _ = machine_shutdown.changed().await;
         })
     };
 
@@ -222,12 +312,130 @@ async fn run_pipeline(config: &Config) -> layermind_shared::error::Result<()> {
             analyzer_task,
             knowledge_task,
             context_task,
+            analysis_task,
+            history_task,
+            machine_task,
         ]),
     )
     .await;
 
     tracing::info!("LayerMind shut down cleanly");
     Ok(())
+}
+
+/// Periodically run the learning analysis pipeline.
+///
+/// Every `interval_secs`, reads all timeline events from the store,
+/// groups by printer, runs the full learning/prediction/optimization
+/// pipeline, and pushes the `BehaviorSummary` into the `ContextStore`
+/// so `PrinterContext.learning` is always up to date.
+///
+/// The loop yields to shutdown via `watch::Receiver` — it does not
+/// block graceful termination.
+async fn run_analysis_loop(
+    context_store: Arc<layermind_context::ContextStore>,
+    timeline_store: Arc<Mutex<TimelineStore>>,
+    mut shutdown: watch::Receiver<()>,
+    interval_secs: u64,
+) {
+    tracing::info!("learning analysis loop running");
+
+    loop {
+        tokio::select! {
+            _ = shutdown.changed() => {
+                tracing::info!("learning analysis loop stopped");
+                break;
+            }
+            _ = tokio::time::sleep(std::time::Duration::from_secs(interval_secs)) => {
+                let events = {
+                    let store = timeline_store.lock().expect("TimelineStore lock poisoned");
+                    store.all().to_vec()
+                };
+
+                if events.is_empty() {
+                    continue;
+                }
+
+                let mut by_printer: std::collections::HashMap<String, Vec<_>> =
+                    std::collections::HashMap::new();
+                for event in events {
+                    by_printer.entry(event.printer_id.clone()).or_default().push(event);
+                }
+
+                let printer_count = by_printer.len();
+                let total_events: usize = by_printer.values().map(|v| v.len()).sum();
+
+                tracing::debug!(
+                    printer_count,
+                    total_events,
+                    "running learning analysis"
+                );
+
+                for (printer_id, printer_events) in &by_printer {
+                    let machine = context_store
+                        .context(printer_id)
+                        .and_then(|ctx| ctx.machine);
+
+                    let summary = LearningEngine::analyze(printer_events, machine.as_ref());
+                    context_store.set_learning(printer_id, summary);
+                }
+
+                tracing::debug!(printer_count, "learning analysis completed");
+            }
+        }
+    }
+}
+
+/// Forward significant printer events into the timeline store and
+/// update the context store's recent-changes summary.
+///
+/// High-frequency telemetry (temperature, position, speed, fan) is
+/// filtered by the mapping function — only print lifecycle and
+/// anomaly events produce timeline records.
+async fn run_history_bridge(
+    mut rx: broadcast::Receiver<Envelope>,
+    timeline_store: Arc<Mutex<TimelineStore>>,
+    context_store: Arc<layermind_context::ContextStore>,
+    mut shutdown: watch::Receiver<()>,
+) {
+    tracing::info!("history bridge running");
+
+    loop {
+        tokio::select! {
+            _ = shutdown.changed() => {
+                tracing::info!("history bridge stopped");
+                break;
+            }
+            result = rx.recv() => {
+                match result {
+                    Ok(envelope) => {
+                        let timeline_events = layermind_history::envelope_to_timeline(&envelope);
+                        if timeline_events.is_empty() {
+                            continue;
+                        }
+                        {
+                            let mut store = timeline_store.lock().expect("TimelineStore lock poisoned");
+                            store.load(timeline_events.clone());
+                        }
+                        for event in &timeline_events {
+                            let category = TimelineCategory::from(&event.kind);
+                            let summary = layermind_history::format_timeline_summary(&event.kind);
+                            let change = RecentChange {
+                                timestamp: event.timestamp,
+                                category,
+                                summary,
+                            };
+                            context_store.record_timeline_event(&event.printer_id, change, &category);
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(n)) => {
+                        tracing::warn!(skipped = n, "history bridge lagging");
+                    }
+                    Err(broadcast::error::RecvError::Closed) => break,
+                }
+            }
+        }
+    }
 }
 
 /// Wait for SIGINT or SIGTERM.

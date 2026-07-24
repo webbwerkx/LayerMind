@@ -662,7 +662,7 @@ pub struct CapabilitySet {
     // ── Monitoring ─────────
     pub supports_filament_sensor: Property<bool>,
     pub supports_camera: Property<bool>,
-    pub supports_encosure: Property<bool>,
+    pub supports_enclosure: Property<bool>,
 
     // ── Performance limits ─
     pub maximum_temperature: Property<f64>,
@@ -704,7 +704,7 @@ impl CapabilitySet {
             supports_remote_updates: Property::default(),
             supports_filament_sensor: Property::default(),
             supports_camera: Property::default(),
-            supports_encosure: Property::default(),
+            supports_enclosure: Property::default(),
             maximum_temperature: Property::default(),
             maximum_velocity: Property::default(),
             maximum_acceleration: Property::default(),

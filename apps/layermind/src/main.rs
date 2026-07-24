@@ -18,8 +18,12 @@ use std::env;
 async fn main() -> anyhow::Result<()> {
     let args: Vec<String> = env::args().collect();
 
-    if args.len() < 2 {
+    if args.len() == 1 || args.iter().any(|a| a == "-h" || a == "--help") {
         print_usage();
+        return Ok(());
+    }
+    if args.iter().any(|a| a == "-V" || a == "--version") {
+        println!("LayerMind v{}", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
 
@@ -33,11 +37,11 @@ async fn main() -> anyhow::Result<()> {
 
     match args[1].as_str() {
         "printer" if args.get(2).map(|s| s.as_str()) == Some("test") => {
-            let rt = application::bootstrap_test(&config).await?;
+            let rt = application::bootstrap(&config).await?;
             commands::cmd_printer_test(&rt, &printer_id).await?;
         }
         "monitor" => {
-            let rt = application::bootstrap_test(&config).await?;
+            let rt = application::bootstrap(&config).await?;
             commands::cmd_monitor(&rt, &printer_id).await?;
         }
         "diagnose" => {
@@ -59,20 +63,34 @@ async fn main() -> anyhow::Result<()> {
 }
 
 fn print_usage() {
-    println!("LayerMind v{}", env!("CARGO_PKG_VERSION"));
+    println!("LayerMind v{} — AI-powered OS for additive manufacturing", env!("CARGO_PKG_VERSION"));
     println!();
-    println!("Usage:");
-    println!("  layermind printer test [printer_id]  Test Moonraker connection");
-    println!("  layermind monitor [printer_id]       Live printer status");
-    println!("  layermind diagnose [printer_id]      AI diagnostic analysis");
-    println!("  layermind run                         Start the full daemon");
+    println!("USAGE:");
+    println!("    layermind <command> [args]");
     println!();
-    println!("Environment:");
-    println!("  LAYERMIND_PROVIDER       AI provider (openai, openrouter, ollama, anthropic, gemini, custom)");
-    println!("  LAYERMIND_MODEL          Model name");
-    println!("  LAYERMIND_PROVIDER_ENDPOINT  Custom endpoint URL");
-    println!("  MOONRAKER_URL            Moonraker WebSocket URL");
-    println!("  DATABASE_URL             PostgreSQL connection string");
+    println!("COMMANDS:");
+    println!("    printer test [id]    Connect to printer and show hardware/capabilities");
+    println!("    monitor [id]         Show live printer context (requires layermind run)");
+    println!("    diagnose [id]        Run AI diagnostic (requires layermind run)");
+    println!("    run                  Start the full daemon pipeline");
+    println!();
+    println!("FLAGS:");
+    println!("    -h, --help           Show this help");
+    println!("    -V, --version        Show version");
+    println!();
+    println!("EXAMPLES:");
+    println!("    MOONRAKER_URL=ws://voron.local:7125/websocket layermind printer test");
+    println!("    layermind run");
+    println!("    layermind monitor");
+    println!("    layermind diagnose");
+    println!();
+    println!("ENVIRONMENT:");
+    println!("    MOONRAKER_URL                  Moonraker WebSocket URL (default: ws://localhost:7125/websocket)");
+    println!("    LAYERMIND_MOONRAKER_API_KEY    Moonraker API key (optional)");
+    println!("    LAYERMIND_PROVIDER             AI provider: openai, openrouter, ollama, anthropic, gemini, custom");
+    println!("    LAYERMIND_MODEL                Model name (e.g., deepseek/deepseek-chat, gpt-4o, llama3.3)");
+    println!("    LAYERMIND_PROVIDER_ENDPOINT    Custom provider endpoint URL");
+    println!("    DATABASE_URL                   PostgreSQL connection string (optional, in-memory fallback)");
 }
 
 #[cfg(test)]

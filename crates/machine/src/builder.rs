@@ -45,15 +45,15 @@ impl MachineProfileBuilder {
         system_info: Option<&serde_json::Value>,
         printer_objects: Option<&serde_json::Value>,
     ) -> MachineProfile {
-        let mut identity =
+        let identity =
             HardwareDiscovery::discover_identity(printer_id, printer_info, None, system_info);
 
-        let mut hardware = HardwareDiscovery::discover_hardware(printer_objects);
+        let mut hardware = HardwareDiscovery::discover_hardware(printer_objects, system_info);
 
         // Apply library matches to boost hardware component confidence.
         self.apply_library_to_hardware(&mut hardware);
 
-        let mut capabilities = CapabilityEngine::derive(&hardware);
+        let capabilities = CapabilityEngine::derive(&hardware);
 
         let mut profile = MachineProfile {
             identity,
@@ -88,11 +88,64 @@ impl MachineProfileBuilder {
         }
     }
 
-    fn apply_library_to_hardware(&self, _hardware: &mut MachineHardware) {
-        // Future: walk every Component and check if its name/ID
-        // matches a known HardwareProfile. If so, set known_profile
-        // and boost component-level confidence.
-        let _lib = &self.library;
+    pub(crate) fn apply_library_to_hardware(&self, hardware: &mut MachineHardware) {
+        // Walk every component and match against the hardware library.
+        for comp in hardware.mcus.iter_mut() {
+            self.library.match_component(&comp.name, &mut comp.known_profile);
+        }
+        for comp in hardware.extruders.iter_mut() {
+            self.library.match_component(&comp.name, &mut comp.known_profile);
+        }
+        for comp in hardware.hotends.iter_mut() {
+            self.library.match_component(&comp.name, &mut comp.known_profile);
+        }
+        for comp in hardware.probes.iter_mut() {
+            self.library.match_component(&comp.name, &mut comp.known_profile);
+        }
+        for comp in hardware.accelerometers.iter_mut() {
+            self.library.match_component(&comp.name, &mut comp.known_profile);
+        }
+        for comp in hardware.cooling.iter_mut() {
+            self.library.match_component(&comp.name, &mut comp.known_profile);
+        }
+        for comp in hardware.filament_sensors.iter_mut() {
+            self.library.match_component(&comp.name, &mut comp.known_profile);
+        }
+        for comp in hardware.heaters.iter_mut() {
+            self.library.match_component(&comp.name, &mut comp.known_profile);
+        }
+        for comp in hardware.thermistors.iter_mut() {
+            self.library.match_component(&comp.name, &mut comp.known_profile);
+        }
+        for comp in hardware.can_devices.iter_mut() {
+            self.library.match_component(&comp.name, &mut comp.known_profile);
+        }
+        for comp in hardware.displays.iter_mut() {
+            self.library.match_component(&comp.name, &mut comp.known_profile);
+        }
+        for comp in hardware.networking.iter_mut() {
+            self.library.match_component(&comp.name, &mut comp.known_profile);
+        }
+        for comp in hardware.load_cells.iter_mut() {
+            self.library.match_component(&comp.name, &mut comp.known_profile);
+        }
+        for comp in hardware.toolheads.iter_mut() {
+            self.library.match_component(&comp.name, &mut comp.known_profile);
+        }
+        for comp in hardware.tool_changers.iter_mut() {
+            self.library.match_component(&comp.name, &mut comp.known_profile);
+        }
+
+        // Optional components.
+        if let Some(ref mut comp) = hardware.control_board {
+            self.library.match_component(&comp.name, &mut comp.known_profile);
+        }
+        if let Some(ref mut comp) = hardware.bed {
+            self.library.match_component(&comp.name, &mut comp.known_profile);
+        }
+        if let Some(ref mut comp) = hardware.enclosure {
+            self.library.match_component(&comp.name, &mut comp.known_profile);
+        }
     }
 }
 
@@ -161,5 +214,55 @@ mod tests {
 
         assert!(profile.capabilities.supports_input_shaping.value);
         assert!(profile.capabilities.supports_adxl.value);
+    }
+
+    #[test]
+    fn library_matches_probe_component() {
+        let builder = MachineProfileBuilder::new();
+        let mut profile = builder.build("p-probe", None, None, None);
+
+        // Add a probe with a name that should match a library profile.
+        profile.hardware.probes = vec![Component {
+            id: "probe_0".into(),
+            name: "BLTouch v3.1".into(),
+            details: ProbeSpec {
+                probe_type: Property::observed(ProbeType::BlTouch),
+                uses_endstop_pin: true,
+                dockable: false,
+            },
+            known_profile: None,
+            installed: None,
+            replaced: None,
+        }];
+
+        builder.apply_library_to_hardware(&mut profile.hardware);
+
+        assert_eq!(
+            profile.hardware.probes[0].known_profile.as_deref(),
+            Some("BLTouch")
+        );
+    }
+
+    #[test]
+    fn library_does_not_match_unknown_component() {
+        let builder = MachineProfileBuilder::new();
+        let mut profile = builder.build("p-unknown", None, None, None);
+
+        profile.hardware.probes = vec![Component {
+            id: "probe_0".into(),
+            name: "Inductive Probe 5mm".into(),
+            details: ProbeSpec {
+                probe_type: Property::observed(ProbeType::MicroProbe),
+                uses_endstop_pin: true,
+                dockable: false,
+            },
+            known_profile: None,
+            installed: None,
+            replaced: None,
+        }];
+
+        builder.apply_library_to_hardware(&mut profile.hardware);
+
+        assert!(profile.hardware.probes[0].known_profile.is_none());
     }
 }

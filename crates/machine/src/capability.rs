@@ -114,7 +114,7 @@ impl CapabilityEngine {
 
         // ── Monitoring ─────────────────────────────────────
         caps.supports_filament_sensor = Property::observed(!hardware.filament_sensors.is_empty());
-        caps.supports_encosure = Property::observed(hardware.enclosure.is_some());
+        caps.supports_enclosure = Property::observed(hardware.enclosure.is_some());
 
         // ── Multiple MCUs ──────────────────────────────────
         caps.supports_multiple_mcus = Property::observed(hardware.mcus.len() > 1);

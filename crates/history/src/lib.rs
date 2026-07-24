@@ -17,11 +17,13 @@
 //! The history crate depends only on `shared`, never on `reasoning` or
 //! `ai`.
 
+pub mod bridge;
 pub mod diff;
 pub mod query;
 pub mod snapshot;
 pub mod store;
 
+pub use bridge::{envelope_to_timeline, format_timeline_summary};
 pub use diff::SnapshotDiffEngine;
 pub use query::TimelineQueryEngine;
 pub use snapshot::SnapshotBuilder;

@@ -5,20 +5,43 @@
 
 use std::sync::Arc;
 
-use layermind_machine::MachineProfileBuilder;
-
 use crate::runtime::Runtime;
 
 /// Test the connection to a printer via Moonraker.
-pub async fn cmd_printer_test(_rt: &Runtime, printer_id: &str) -> anyhow::Result<()> {
+///
+/// Connects, queries hardware info, builds a full MachineProfile,
+/// and prints identity, hardware components, and capabilities.
+pub async fn cmd_printer_test(rt: &Runtime, printer_id: &str) -> anyhow::Result<()> {
     println!("Moonraker Connection\n");
+    println!("  URL: {}", rt.config.moonraker.url);
     println!("  Printer: {printer_id}");
     println!();
 
-    let profile = MachineProfileBuilder::unknown_profile(printer_id);
+    // Query real hardware info from Moonraker.
+    let (server_info, printer_info, printer_objects) =
+        match layermind_moonraker::client::query_hardware_info(&rt.config.moonraker).await {
+            Ok(result) => result,
+            Err(e) => {
+                anyhow::bail!(
+                    "Failed to connect to Moonraker: {e}\n  Check that MOONRAKER_URL is correct and the printer is running."
+                );
+            }
+        };
+
+    let profile = rt
+        .machine_builder
+        .build(
+            printer_id,
+            Some(&printer_info),
+            Some(&server_info),
+            Some(&printer_objects),
+        );
 
     println!("Machine:");
     println!("  Motion: {:?}", profile.identity.machine_type.value);
+    if let Some(ref nickname) = profile.identity.nickname {
+        println!("  Hostname: {nickname}");
+    }
     if let Some(ref fw) = profile.identity.firmware {
         if let Some(ref v) = fw.klipper_version {
             println!("  Klipper: {v}");
@@ -36,6 +59,42 @@ pub async fn cmd_printer_test(_rt: &Runtime, printer_id: &str) -> anyhow::Result
         println!("  Model: {} [{:?}]", model.value, model.source);
     }
 
+    // Hardware components.
+    println!();
+    println!("Hardware:");
+
+    if let Some(ref board) = profile.hardware.control_board {
+        println!("  Control board: {}", board.name);
+        if let Some(ref mfr) = board.details.manufacturer {
+            println!("    Manufacturer: {mfr}");
+        }
+        if let Some(ref mcu) = board.details.mcu {
+            println!("    MCU: {mcu}");
+        }
+    }
+
+    println!("  Extruders: {}", profile.hardware.extruders.len());
+    for ex in &profile.hardware.extruders {
+        println!("    - {} ({:?})", ex.name, ex.details.extruder_type.value);
+    }
+    println!("  Hotends: {}", profile.hardware.hotends.len());
+    if let Some(ref bed) = profile.hardware.bed {
+        println!("  Heated bed: {:?}", bed.details.bed_type.value);
+    }
+    println!("  MCUs: {}", profile.hardware.mcus.len());
+    for mcu in &profile.hardware.mcus {
+        println!("    - {} (primary: {})", mcu.name, mcu.details.is_primary);
+    }
+    println!("  Fans: {}", profile.hardware.cooling.len());
+    println!("  Probes: {}", profile.hardware.probes.len());
+
+    if let Some(ref motion) = profile.hardware.motion_system {
+        println!("  Axes: {}", motion.axes.len());
+        if let Some(ref bv) = motion.build_volume {
+            println!("  Build volume: {:.0} × {:.0} × {:.0} mm", bv.x, bv.y, bv.z);
+        }
+    }
+
     println!();
     println!("Capabilities:");
 
@@ -43,11 +102,7 @@ pub async fn cmd_printer_test(_rt: &Runtime, printer_id: &str) -> anyhow::Result
     let cap = |name: &str, supported: bool| {
         println!(
             "  {name}: {}",
-            if supported {
-                "supported"
-            } else {
-                "not detected"
-            }
+            if supported { "supported" } else { "not detected" }
         )
     };
     cap("Input shaping", caps.supports_input_shaping.value);
@@ -57,9 +112,20 @@ pub async fn cmd_printer_test(_rt: &Runtime, printer_id: &str) -> anyhow::Result
     cap("BLTouch/CRTouch", caps.supports_bltouch.value);
     cap("Beacon probe", caps.supports_beacon.value);
     cap("High temperature", caps.supports_high_temperature.value);
+    cap("Filament sensor", caps.supports_filament_sensor.value);
+    cap("Enclosure", caps.supports_enclosure.value);
     if caps.maximum_temperature.value > 0.0 {
         println!("  Max temperature: {:.0}°C", caps.maximum_temperature.value);
     }
+    if caps.maximum_velocity.value > 0.0 {
+        println!("  Max velocity: {:.0} mm/s", caps.maximum_velocity.value);
+    }
+    if caps.maximum_acceleration.value > 0.0 {
+        println!("  Max acceleration: {:.0} mm/s²", caps.maximum_acceleration.value);
+    }
+
+    println!();
+    println!("Generated: {}", profile.generated_at);
 
     Ok(())
 }

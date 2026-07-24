@@ -17,6 +17,7 @@ members = [
     "crates/reasoning",
     "crates/core",
     "apps/layermind",
+    "apps/layermind-tui",
 ]
 resolver = "2"
 

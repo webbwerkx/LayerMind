@@ -185,6 +185,147 @@ async fn connect_and_run(
     }
 }
 
+/// Connect to Moonraker, query hardware info, and disconnect.
+///
+/// Returns `(server_info, printer_info, printer_objects)` as raw JSON values.
+/// Times out after 10 seconds if responses are incomplete.
+pub async fn query_hardware_info(
+    config: &MoonrakerConfig,
+) -> Result<(
+    serde_json::Value,
+    serde_json::Value,
+    serde_json::Value,
+)> {
+    let url = url::Url::parse(&config.url)
+        .map_err(|e| layermind_shared::error::Error::Connection(format!("invalid URL: {e}")))?;
+
+    let connect_future = tokio_tungstenite::connect_async(url.as_str());
+    let (ws, _resp) = tokio::time::timeout(Duration::from_secs(10), connect_future)
+        .await
+        .map_err(|_| {
+            layermind_shared::error::Error::Connection("WebSocket connect timed out".into())
+        })?
+        .map_err(|e| {
+            layermind_shared::error::Error::Connection(format!("WebSocket connect failed: {e}"))
+        })?;
+
+    let (mut ws_tx, mut ws_rx) = ws.split();
+
+    // Authenticate if API key is configured.
+    if let Some(ref api_key) = config.api_key {
+        let auth_req = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "access.oneshot_token",
+            "params": { "token": api_key },
+            "id": 0
+        });
+        ws_tx
+            .send(tokio_tungstenite::tungstenite::Message::Text(
+                auth_req.to_string().into(),
+            ))
+            .await
+            .map_err(|e| {
+                layermind_shared::error::Error::Connection(format!("auth send failed: {e}"))
+            })?;
+    }
+
+    // Send three requests with sequential IDs.
+    let objects = protocol::PrinterObject::all();
+    let requests = vec![
+        protocol::server_info_request(1),
+        protocol::printer_info_request(2),
+        protocol::query_request(objects, 3),
+    ];
+
+    for req in &requests {
+        let json = serde_json::to_string(req).map_err(|e| {
+            layermind_shared::error::Error::Protocol(format!("serialize failed: {e}"))
+        })?;
+        ws_tx
+            .send(tokio_tungstenite::tungstenite::Message::Text(json.into()))
+            .await
+            .map_err(|e| {
+                layermind_shared::error::Error::Connection(format!("request send failed: {e}"))
+            })?;
+    }
+
+    // Collect responses by ID.
+    let mut result_server: Option<serde_json::Value> = None;
+    let mut result_printer: Option<serde_json::Value> = None;
+    let mut result_objects: Option<serde_json::Value> = None;
+
+    let deadline = tokio::time::sleep(Duration::from_secs(10));
+    tokio::pin!(deadline);
+
+    let result = loop {
+        tokio::select! {
+            msg = ws_rx.next() => {
+                match msg {
+                    Some(Ok(tokio_tungstenite::tungstenite::Message::Text(text))) => {
+                        if let Ok(rpc_msg) = serde_json::from_str::<protocol::RpcMessage>(&text) {
+                            if let (Some(id), Some(result)) = (&rpc_msg.id, &rpc_msg.result) {
+                                match id {
+                                    serde_json::Value::Number(n) if n.as_i64() == Some(1) => {
+                                        result_server = Some(result.clone());
+                                    }
+                                    serde_json::Value::Number(n) if n.as_i64() == Some(2) => {
+                                        result_printer = Some(result.clone());
+                                    }
+                                    serde_json::Value::Number(n) if n.as_i64() == Some(3) => {
+                                        result_objects = Some(result.clone());
+                                    }
+                                    _ => {}
+                                }
+                            }
+
+                            if result_server.is_some()
+                                && result_printer.is_some()
+                                && result_objects.is_some()
+                            {
+                                break Ok(());
+                            }
+                        }
+                    }
+                    Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_))) => {
+                        break Err(layermind_shared::error::Error::Connection(
+                            "server closed connection".into(),
+                        ));
+                    }
+                    Some(Ok(_)) => {}
+                    Some(Err(e)) => {
+                        break Err(layermind_shared::error::Error::Connection(
+                            format!("WebSocket error: {e}"),
+                        ));
+                    }
+                    None => {
+                        break Err(layermind_shared::error::Error::Connection(
+                            "stream ended".into(),
+                        ));
+                    }
+                }
+            }
+            () = &mut deadline => {
+                break Err(layermind_shared::error::Error::Connection(
+                    "query timed out after 10s".into(),
+                ));
+            }
+        }
+    };
+
+    // Send close frame (best-effort).
+    let _ = ws_tx
+        .send(tokio_tungstenite::tungstenite::Message::Close(None))
+        .await;
+
+    result?;
+
+    Ok((
+        result_server.unwrap_or(serde_json::Value::Null),
+        result_printer.unwrap_or(serde_json::Value::Null),
+        result_objects.unwrap_or(serde_json::Value::Null),
+    ))
+}
+
 /// Exponential backoff: 1s, 2s, 4s, 8s, 16s, 32s, 60s (capped).
 fn backoff_duration(attempt: u32) -> Duration {
     let secs = 2.0_f64.powi(attempt.saturating_sub(1) as i32).min(60.0);
