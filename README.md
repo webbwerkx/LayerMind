@@ -1,252 +1,358 @@
-# LayerMind
+<p align="center">
+  <img src="https://img.shields.io/badge/rust-1.85+-orange?style=flat-square&logo=rust" alt="Rust">
+  <img src="https://img.shields.io/badge/license-proprietary-red?style=flat-square" alt="License">
+  <img src="https://img.shields.io/github/last-commit/webbwerkx/LayerMind?style=flat-square&color=teal" alt="Last Commit">
+  <img src="https://img.shields.io/badge/tests-241_passing-2ea44f?style=flat-square" alt="Tests">
+  <img src="https://img.shields.io/badge/status-phase_5b-blue?style=flat-square" alt="Status">
+</p>
 
-**AI-powered operating system for additive manufacturing.**
+<div align="center">
+  <h1>✦ LayerMind ✦</h1>
+  <p><strong>AI-powered intelligence layer for 3D printing</strong></p>
+  <p><em>Your printer gets smarter every time it prints.</em></p>
+  <br>
+  <p>
+    <a href="#-features">Features</a> •
+    <a href="#-quick-start">Quick Start</a> •
+    <a href="#-architecture">Architecture</a> •
+    <a href="#-terminal-ui">Terminal UI</a> •
+    <a href="#-commands">Commands</a> •
+    <a href="#-development">Development</a>
+  </p>
+</div>
 
-[![Rust](https://img.shields.io/badge/rust-1.85+-orange.svg)](https://www.rust-lang.org)
-[![CI](https://img.shields.io/github/actions/workflow/status/webbwerkx/LayerMind/ci.yml?branch=main)](https://github.com/webbwerkx/LayerMind/actions)
-[![License](https://img.shields.io/badge/license-proprietary-red.svg)](LICENSE)
-
-LayerMind is an intelligence layer that sits above your 3D printer stack — Klipper, Moonraker, Mainsail/Fluidd. It observes every print, learns from every failure, and recommends actionable improvements. Your printer gets smarter every time it prints.
+<br>
 
 ---
 
-## Features
+LayerMind sits above your existing 3D printer stack — Klipper, Moonraker, Mainsail, Fluidd — and turns every print into a data point. It observes hardware, tracks health over time, detects failure patterns, and runs AI diagnostics that give you actionable recommendations.
 
-- **Real-time monitor** — Terminal UI showing temperatures, progress, events, and diagnostics in a dark-industrial theme
-- **Hardware discovery** — Auto-detects extruders, hotends, MCUs, probes, fans, accelerometers, and motion systems from Moonraker
-- **Capability detection** — Identifies what your printer can do (input shaping, pressure advance, BLTouch, CAN bus, etc.)
-- **Timeline engine** — Records every significant event: print lifecycle, failures, config changes, hardware swaps
-- **Learning analysis** — Detects recurring patterns like "config change followed by failures" and tracks component health trends
-- **AI diagnostics** — Plug in any provider (OpenAI, OpenRouter, Ollama, Anthropic) for intelligent print failure analysis with actionable recommendations
-- **Context engine** — Maintains a searchable cache of printer health, history, known issues, and machine profile
-- **CLI dashboard** — `printer test`, `monitor`, `diagnose` commands for quick inspection
-- **Graceful degradation** — No database? Uses in-memory storage. No AI provider? Still monitors and collects.
+**No slicer replacement. No dashboard replacement. No chatbot.** It integrates with what you already use and makes it smarter.
+
+<br>
 
 ---
 
-## Architecture
+## ✦ Features
+
+<table>
+<tr>
+<td width="50%">
+
+**📡 Real-time Monitoring**  
+Full-screen terminal UI with live temperature gauges, progress bars, event timeline, and AI diagnostics panel. Polls Moonraker every 2 seconds.
+
+**🔧 Hardware Discovery**  
+Auto-detects extruders, hotends, MCUs, probes, fans, accelerometers, motion systems, and build volume from Moonraker's API.
+
+**🧠 Capability Detection**  
+Identifies what your printer can do — input shaping, pressure advance, sensorless homing, CAN bus, BLTouch, high-temperature printing — with confidence scores for each.
+
+</td>
+<td width="50%">
+
+**📜 Timeline Engine**  
+Immutable event log: print lifecycle, failures, config changes, hardware swaps, firmware updates. Queryable by printer, category, and component.
+
+**📈 Learning Analysis**  
+Detects recurring patterns like "config change followed by consecutive failures" and tracks component health degradation over time.
+
+**🤖 AI Diagnostics**  
+Plug in any provider (OpenAI, OpenRouter, Anthropic, Ollama, Gemini) for intelligent failure analysis. Prompt → parse → trust-validate → prioritize.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+**💾 Context Engine**  
+Searchable cache of printer health, history, known issues, and machine profile. Shared between the daemon pipeline and all CLI/TUI consumers.
+
+**🛡️ Graceful Degradation**  
+No PostgreSQL? Uses in-memory storage. No AI provider? Still monitors and collects. No configuration file? Environment variables only.
+
+</td>
+<td width="50%">
+
+**⌨️ CLI Dashboard**  
+Four commands: `printer test` to verify connectivity, `run` to start the daemon, `monitor` to inspect live context, `diagnose` to run AI analysis.
+
+**🎨 Dark Industrial Theme**  
+Navy/charcoal backgrounds, teal/cyan accents, clean rounded borders. Professional monitoring aesthetic — not a sci-fi HUD.
+
+</td>
+</tr>
+</table>
+
+<br>
+
+---
+
+## ✦ Quick Start
+
+```shell
+# ── 1. Clone & build ──────────────────────────────────────────────
+git clone https://github.com/webbwerkx/LayerMind.git
+cd LayerMind
+cargo build --release
+
+# ── 2. Install to PATH ────────────────────────────────────────────
+cp target/release/layermind ~/.local/bin/
+cp target/release/layermind-tui ~/.local/bin/
+
+# ── 3. Point at your printer ──────────────────────────────────────
+export MOONRAKER_URL=ws://voron-0.local:7125/websocket
+
+# ── 4. Test the connection ────────────────────────────────────────
+layermind printer test
+
+# ── 5. Launch the real-time TUI ───────────────────────────────────
+layermind-tui
+```
+
+> **Don't have a printer handy?** The `printer test` command requires a live Moonraker connection. Everything else — building, testing, exploring the code — works offline.
+
+<br>
+
+---
+
+## ✦ Terminal UI
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                         LAYERMIND CLI/TUI                        │
-│              printer test · monitor · diagnose · run             │
-└──────────────────────────┬───────────────────────────────────────┘
-                           │
-┌──────────────────────────▼───────────────────────────────────────┐
-│                       layermind-core                             │
-│                Pipeline orchestration & lifecycle                │
-└──────────────────────────┬───────────────────────────────────────┘
-                           │
-           ┌───────────────┼───────────────────┐
-           │               │                   │
-┌──────────▼──────┐ ┌─────▼──────┐ ┌──────────▼──────┐
-│   Moonraker     │ │  Printer   │ │    Machine      │
-│  WebSocket      │ │Normalizer  │ │   Discovery     │
-│  Client         │ │            │ │                 │
-└──────┬──────────┘ └─────┬──────┘ └──────────┬──────┘
-       │                  │                   │
-       │           ┌──────▼──────┐            │
-       │           │  Telemetry  │            │
-       ├──────────▶│   Engine    │◄───────────┤
-       │           └──────┬──────┘            │
-       │                  │                   │
-       │           ┌──────▼──────┐            │
-       │           │  Analyzer   │            │
-       └──────────▶│   Engine    │            │
-                   └──────┬──────┘            │
-                          │                   │
-                   ┌──────▼──────┐            │
-                   │  Knowledge  │            │
-                   │   Engine    │            │
-                   └──────┬──────┘            │
-                          │                   │
-                   ┌──────▼──────┐            │
-                   │   Context   │            │
-                   │   Engine    │◄───────────┤
-                   │             │            │
-                   │ ContextStore│            │
-                   └──────┬──────┘            │
-                          │                   │
-              ┌───────────┼───────────┐       │
-              │           │           │       │
-      ┌───────▼────┐ ┌────▼───┐ ┌────▼───┐   │
-      │  Learning  │ │History │ │  AI    │   │
-      │  Analysis  │ │ Bridge │ │Diagnose│   │
-      └────────────┘ └────────┘ └────────┘   │
-                                              │
-      ┌───────────────────────────────────────┘
-      │
-┌─────▼────────────────────────────────────────────────────────────┐
-│                       Sink (Database / Memory)                   │
-└──────────────────────────────────────────────────────────────────┘
+┌─ LAYERMIND ◆ voron-0 ◆ PRINTING ──────── 02:34:12  142/300 ─┐
+│ ┌─ STATE ───────────────┐ ┌─ TEMPERATURES ─────────────────┐  │
+│ │  Host:     voron-0    │ │  Extruder   235°C / 240°C       │  │
+│ │  Status:   PRINTING   │ │  ████████████████░░░░░░░░░░░░░░░ │  │
+│ │  Print:    benchy     │ │  Bed        105°C / 110°C       │  │
+│ │  Progress: 47.3%      │ │  ████████████████████████████████ │  │
+│ │  Position: X125.0     │ └─────────────────────────────────┘  │
+│ │           Y150.0      │ ┌─ PROGRESS ───────────────────────┐ │
+│ │           Z200.0      │ │  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░ │ │
+│ │  Speed:    80 mm/s    │ │  47.3%   Layer 142/300           │ │
+│ └───────────────────────┘ └─────────────────────────────────┘  │
+│ ┌─ EVENTS ──────────────────────┐ ┌─ DIAGNOSTICS ─────────────┐│
+│ │  ◆ Connected to Moonraker     │ │  Press d to run AI        ││
+│ │  ◆ Print started: benchy.gcode│ │  diagnostic               ││
+│ │  ⚠ PID deviation detected     │ └──────────────────────────┘│
+│ └───────────────────────────────┘                              │
+├─ q:quit │ d:diagnose │ m:machine │ TAB:focus ──────────────────┤
+└────────────────────────────────────────────────────────────────┘
+```
+
+| Key | Action | Key | Action |
+|-----|--------|-----|--------|
+| `q` | Quit | `Tab` | Cycle focus panel |
+| `d` | Run AI diagnostic | `↑` | Scroll events up |
+| `m` | Open machine info popup | `↓` | Scroll events down |
+| `M` | Close machine info popup | — | — |
+
+<br>
+
+---
+
+## ✦ Architecture
+
+```
+                    ┌──────────────────────┐
+                    │   CLI / TUI / API    │
+                    │  printer test        │
+                    │  monitor             │
+                    │  diagnose            │
+                    │  layermind-tui       │
+                    └──────────┬───────────┘
+                               │
+                    ┌──────────▼───────────┐
+                    │     layermind-core    │
+                    │  Pipeline orchestrator│
+                    └──────────┬───────────┘
+                               │
+          ┌────────────────────┼────────────────────┐
+          │                    │                    │
+┌─────────▼──────┐   ┌────────▼───────┐  ┌─────────▼──────┐
+│   Moonraker    │   │    Printer     │  │    Machine     │
+│  WebSocket     │   │  Normalizer    │  │   Discovery    │
+│  Client        │   │                │  │                │
+└────────┬───────┘   └────────┬───────┘  └────────┬───────┘
+         │                    │                    │
+         │           ┌────────▼───────┐            │
+         │           │   Telemetry    │            │
+         ├──────────▶│    Engine      │◄───────────┤
+         │           └────────┬───────┘            │
+         │                    │                    │
+         │           ┌────────▼───────┐            │
+         │           │   Analyzer     │            │
+         └──────────▶│    Engine      │            │
+                     └────────┬───────┘            │
+                              │                    │
+                     ┌────────▼───────┐            │
+                     │   Knowledge    │            │
+                     │    Engine      │            │
+                     └────────┬───────┘            │
+                              │                    │
+                     ┌────────▼───────┐            │
+                     │    Context     │            │
+                     │    Engine      │◄───────────┤
+                     │                │            │
+                     │  ContextStore   │            │
+                     └────────┬───────┘            │
+                              │                    │
+                ┌─────────────┼────────────┐       │
+                │             │            │       │
+        ┌───────▼────┐  ┌────▼────┐ ┌────▼────┐   │
+        │  Learning  │  │ History │ │    AI   │   │
+        │  Analysis  │  │ Bridge  │ │Diagnose │   │
+        └────────────┘  └─────────┘ └─────────┘   │
+                                                   │
+        ┌──────────────────────────────────────────┘
+        │
+        ▼
+┌──────────────────────────────────────────────────┐
+│            Sink (Database / Memory)               │
+└──────────────────────────────────────────────────┘
 ```
 
 ### Crate Map
 
-| Crate | Role |
-|---|---|
-| `layermind-core` | Pipeline orchestration, lifecycle management |
-| `layermind-shared` | Base types: events, profiles, capabilities, recommendations |
-| `layermind-config` | Environment-driven configuration |
-| `layermind-moonraker` | WebSocket client for Klipper's Moonraker API |
-| `layermind-printer` | Printer data normalization |
-| `layermind-telemetry` | Event collection, buffering, flushing |
-| `layermind-analyzer` | Pattern detection rules |
-| `layermind-knowledge` | Knowledge record production |
-| `layermind-context` | Cached printer context engine |
-| `layermind-learning` | Trend analysis and prediction |
-| `layermind-history` | Immutable timeline store |
-| `layermind-machine` | Hardware discovery, capability derivation, confidence engine |
-| `layermind-reasoning` | AI diagnostic pipeline (prompt → parse → validate → prioritize) |
-| `layermind-ai` | Provider abstractions (OpenAI, OpenRouter, Ollama, Anthropic) |
-| `layermind-database` | PostgreSQL persistence (optional, in-memory fallback) |
+| Crate | Lines | Role |
+|---|---|---|
+| `layermind-core` | 674 | Pipeline orchestration, lifecycle management |
+| `layermind-shared` | 1,931 | Base types: events, profiles, capabilities, recommendations |
+| `layermind-config` | 178 | Environment-driven configuration |
+| `layermind-moonraker` | 556 | WebSocket client for Klipper's Moonraker API |
+| `layermind-printer` | 364 | Printer data normalization |
+| `layermind-telemetry` | 461 | Event collection, buffering, flushing |
+| `layermind-analyzer` | 581 | Pattern detection rules |
+| `layermind-knowledge` | 232 | Knowledge record production |
+| `layermind-context` | 528 | Cached printer context engine |
+| `layermind-learning` | 403 | Trend analysis and prediction |
+| `layermind-history` | 677 | Immutable timeline store |
+| `layermind-machine` | 1,102 | Hardware discovery, capability derivation, confidence engine |
+| `layermind-reasoning` | 1,024 | AI diagnostic pipeline (prompt → parse → validate → prioritize) |
+| `layermind-ai` | 647 | Provider abstractions (OpenAI, OpenRouter, Ollama, Anthropic, Gemini) |
+| `layermind-database` | 213 | PostgreSQL persistence (optional, in-memory fallback) |
+| `layermind-logging` | 48 | Logging configuration |
+
+<br>
 
 ---
 
-## Quick Start
+## ✦ Commands
 
-### Prerequisites
-
-- Rust 1.85+ (`rustup update`)
-- A Klipper-based 3D printer with Moonraker running
-
-### Setup
-
-```fish
-# Clone
-git clone https://github.com/webbwerkx/LayerMind.git
-cd LayerMind
-
-# Build
-cargo build --release
-
-# Install to PATH
-cp target/release/layermind ~/.local/bin/
-cp target/release/layermind-tui ~/.local/bin/
-
-# Point at your printer
-set -x MOONRAKER_URL ws://your-printer.local:7125/websocket
-
-# Test connection
-layermind printer test
 ```
+layermind <command> [args]
 
-### Commands
+Commands:
+  printer test [id]    Connect to Moonraker and print full hardware report
+  run                  Start the daemon pipeline (telemetry → analysis → context)
+  monitor [id]         Show live printer context (requires daemon running)
+  diagnose [id]        Run AI diagnostic (requires daemon running + AI provider)
 
-| Command | What it does |
-|---|---|
-| `layermind printer test` | Connect to Moonraker and print full hardware report |
-| `layermind run` | Start the daemon pipeline (telemetry → analysis → context) |
-| `layermind monitor` | Show live printer context (requires daemon) |
-| `layermind diagnose` | Run AI diagnostic (requires daemon + AI provider configured) |
-| `layermind-tui` | Full-screen terminal UI with real-time monitoring |
+Flags:
+  -h, --help           Show this help
+  -V, --version        Show version
+
+Environment:
+  MOONRAKER_URL                  WebSocket URL (default: ws://localhost:7125/websocket)
+  LAYERMIND_MOONRAKER_API_KEY    API key (optional)
+  LAYERMIND_PROVIDER             AI provider: openai, openrouter, ollama, anthropic, gemini, custom
+  LAYERMIND_MODEL                Model name (e.g., deepseek/deepseek-chat, gpt-4o, llama3.3)
+```
 
 ### AI Provider Setup
 
-```fish
-set -x LAYERMIND_PROVIDER openrouter
-set -x LAYERMIND_MODEL deepseek/deepseek-chat
-layermind run
-layermind diagnose
+```shell
+# OpenRouter (recommended — works with free models)
+export LAYERMIND_PROVIDER=openrouter
+export LAYERMIND_MODEL=deepseek/deepseek-chat
+
+# Ollama (local, no API key needed)
+export LAYERMIND_PROVIDER=ollama
+export LAYERMIND_MODEL=llama3.3
+
+# OpenAI
+export LAYERMIND_PROVIDER=openai
+export LAYERMIND_MODEL=gpt-4o
 ```
 
-See [`USAGE.md`](USAGE.md) for complete setup instructions, provider configs, troubleshooting, and TUI keyboard controls.
+<br>
 
 ---
 
-## Terminal UI
+## ✦ Development
 
-```
-┌─ LAYERMIND ◆ voron-0 ◆ IDLE ──────── 01:23:45  42/84 ─┐
-│ ┌─ STATE ────────────┐ ┌─ TEMPERATURES ───────────┐   │
-│ │  Host:     voron-0  │ │  Extruder 220°C / 240°C  │   │
-│ │  Status:   IDLE     │ │  ████████░░░░░░░░░░░░░░░  │   │
-│ │  Print:    benchy   │ │  Bed       60°C /  60°C   │   │
-│ │  Progress: 45.2%    │ │  ████████████████████████  │   │
-│ │  Position: X125.0   │ └──────────────────────────┘   │
-│ │           Y150.0    │ ┌─ PROGRESS ─────────────────┐ │
-│ │           Z200.0    │ │  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░ │ │
-│ │  Speed:    80 mm/s  │ │  45.2%   Layer 42/84       │ │
-│ └─────────────────────┘ └──────────────────────────┘   │
-│ ┌─ EVENTS ───────────────┐ ┌─ DIAGNOSTICS ───────────┐│
-│ │  ◆ Connected to MR     │ │  Press d for diagnostic ││
-│ │  ⚠ PID deviation       │ └─────────────────────────┘│
-│ └────────────────────────┘                             │
-├─ q:quit │ d:diagnose │ m:machine │ TAB:focus ─────────┤
-└───────────────────────────────────────────────────────┘
-```
+### Build & Test
 
-Dark-industrial Ratatui TUI. Real-time Moonraker polling every 2 seconds. Hotkeys for diagnostics, machine info popup, and panel focus cycling.
-
----
-
-## Development
-
-### Build
-
-```fish
-cargo build --release
-```
-
-### Test
-
-```fish
-cargo test --workspace  # 240+ tests, all passing
+```shell
+cargo build --release          # Release build (all packages)
+cargo test --workspace         # 241 tests, all passing
+cargo clippy --workspace       # Zero errors
 ```
 
 ### Project Structure
 
 ```
 apps/
-├── layermind/           # CLI binary
-└── layermind-tui/       # TUI binary
+├── layermind/           #    558 lines — CLI binary
+└── layermind-tui/       #    677 lines — TUI binary
 crates/
-├── core/                # Pipeline orchestration
-├── shared/              # Base types
-├── config/              # Configuration
-├── moonraker/           # WebSocket client
-├── printer/             # Normalization
-├── telemetry/           # Event collection
-├── analyzer/            # Pattern detection
-├── knowledge/           # Knowledge records
-├── context/             # Context engine
-├── learning/            # Trend analysis
-├── history/             # Timeline store
-├── machine/             # Hardware discovery
-├── reasoning/           # AI diagnostics
-├── ai/                  # AI providers
-├── database/            # PostgreSQL
-└── logging/             # Logging config
+├── core/                #    674 lines — Pipeline orchestration
+├── shared/              #  1,931 lines — Base types
+├── config/              #    178 lines — Configuration
+├── moonraker/           #    556 lines — WebSocket client
+├── printer/             #    364 lines — Normalization
+├── telemetry/           #    461 lines — Event collection
+├── analyzer/            #    581 lines — Pattern detection
+├── knowledge/           #    232 lines — Knowledge records
+├── context/             #    528 lines — Context engine
+├── learning/            #    403 lines — Trend analysis
+├── history/             #    677 lines — Timeline store
+├── machine/             #  1,102 lines — Hardware discovery
+├── reasoning/           #  1,024 lines — AI diagnostics
+├── ai/                  #    647 lines — AI providers
+├── database/            #    213 lines — PostgreSQL
+└── logging/             #     48 lines — Logging config
 ```
 
 ### Tech Stack
 
-- **Language:** Rust (edition 2024)
-- **Async runtime:** Tokio
-- **TUI:** Ratatui 0.29 + Crossterm 0.28
-- **Database:** SQLx + PostgreSQL (optional)
-- **AI providers:** OpenAI, OpenRouter, Anthropic, Ollama, Gemini, custom
-- **Serialization:** Serde + Serde JSON
-- **WebSocket:** tokio-tungstenite
-- **Logging:** Tracing + tracing-subscriber
+| Technology | Purpose |
+|---|---|
+| **Rust** (edition 2024) | Systems programming language |
+| **Tokio** | Async runtime |
+| **Ratatui 0.29** + **Crossterm 0.28** | Terminal UI framework |
+| **SQLx** + **PostgreSQL** | Optional persistence |
+| **tokio-tungstenite** | WebSocket client |
+| **Serde** + **Serde JSON** | Serialization |
+| **Tracing** + **tracing-subscriber** | Structured logging |
+| **OpenAI / OpenRouter / Anthropic / Ollama / Gemini** | AI providers |
+
+<br>
 
 ---
 
-## Status
+## ✦ Roadmap
 
 | Phase | Status | Description |
-|---|---|---|
-| 1 | ✅ | Foundation: telemetry pipeline, Moonraker integration, config |
-| 2 | ✅ | Intelligence: AI diagnostics, trust validation, prioritization |
-| 3 | ✅ | Memory: timeline history, component health, failure prediction |
-| 4 | ✅ | Optimization: learning analysis, pattern detection, hardware library |
-| 5a | ✅ | CLI polish: --help, --version, error messages, printer test with real data |
-| 5b | ✅ | TUI: real-time monitoring, diagnostics, machine info, responsive layout |
-| 5c | ⏳ | Desktop app (Tauri) |
-| 6 | 📋 | Fleet management, multi-printer dashboards |
+|:------|:------:|:------------|
+| 1 — Foundation | ✅ | Telemetry pipeline, Moonraker integration, configuration |
+| 2 — Intelligence | ✅ | AI diagnostics, trust validation, prompt building, prioritization |
+| 3 — Memory | ✅ | Timeline history, component health, failure prediction, diffs |
+| 4 — Optimization | ✅ | Learning analysis, pattern detection, hardware library, confidence |
+| 5a — CLI Polish | ✅ | --help/--version, error messages, real Moonraker printer test |
+| 5b — TUI | ✅ | Real-time monitoring, diagnostics, machine info, responsive layout |
+| 5c — Desktop | ⏳ | Tauri desktop app with React frontend |
+| 6 — Fleet | 📋 | Multi-printer management, dashboards, alerts |
+
+<br>
 
 ---
 
-## License
+<p align="center">
+  <a href="https://github.com/webbwerkx/LayerMind/issues">Report a bug</a> •
+  <a href="https://github.com/webbwerkx/LayerMind/discussions">Feature request</a> •
+  <a href="USAGE.md">Full usage guide</a>
+</p>
 
-Proprietary. All rights reserved.
+<p align="center">
+  <sub>Built with Rust · Licensed under proprietary terms</sub>
+</p>
