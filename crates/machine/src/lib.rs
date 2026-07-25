@@ -20,12 +20,14 @@
 
 pub mod builder;
 pub mod capability;
+pub mod config_parser;
 pub mod confidence;
 pub mod discovery;
 pub mod library;
 
 pub use builder::MachineProfileBuilder;
 pub use capability::CapabilityEngine;
+pub use config_parser::{parse_config, ParsedConfig};
 pub use confidence::ConfidenceEngine;
 pub use discovery::HardwareDiscovery;
 pub use library::HardwareLibrary;

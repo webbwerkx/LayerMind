@@ -8,6 +8,7 @@ use chrono::Utc;
 use layermind_shared::machine::*;
 
 use crate::capability::CapabilityEngine;
+use crate::config_parser::ParsedConfig;
 use crate::confidence::ConfidenceEngine;
 use crate::discovery::HardwareDiscovery;
 use crate::library::HardwareLibrary;
@@ -88,6 +89,211 @@ impl MachineProfileBuilder {
         }
     }
 
+    pub fn enrich_from_config(&self, profile: &mut MachineProfile, config: &ParsedConfig) {
+        // ── 1. Stepper drivers ──────────────────────────────────
+        if let Some(ref mut motion) = profile.hardware.motion_system {
+            for axis in &mut motion.axes {
+                let axis_name = format!("stepper_{}", axis.name);
+                if let Some(driver_name) = config.stepper_drivers.get(&axis_name) {
+                    let chip = parse_driver_chip(driver_name);
+                    axis.driver = Some(Driver {
+                        chip: Property::new(chip, InformationSource::PrinterConfig, 0.95),
+                        mode: Property::new(DriverMode::Unknown, InformationSource::PrinterConfig, 0.5),
+                        current: None,
+                        address: None,
+                    });
+                    if let Some(steps) = config.microsteps.get(&axis.name) {
+                        axis.microsteps = Some(Property::new(*steps, InformationSource::PrinterConfig, 0.95));
+                    }
+                    if let Some(dist) = config.rotation_distance.get(&axis.name) {
+                        axis.rotation_distance = Some(Property::new(*dist, InformationSource::PrinterConfig, 0.95));
+                    }
+                }
+            }
+        }
+
+        // ── 2. Endstops ─────────────────────────────────────────
+        if let Some(ref mut motion) = profile.hardware.motion_system {
+            for axis in &mut motion.axes {
+                if config.endstops.contains_key(&axis.name) {
+                    axis.endstop = Some(EndstopType::Unknown);
+                }
+            }
+        }
+
+        // ── 3. Probe ────────────────────────────────────────────
+        if let Some(ref probe_section) = config.probe {
+            let exists = !profile.hardware.probes.is_empty();
+            if !exists {
+                let probe_type = match probe_section.as_str() {
+                    "bltouch" => ProbeType::BlTouch,
+                    "probe" => ProbeType::Unknown,
+                    _ => ProbeType::Unknown,
+                };
+                profile.hardware.probes.push(Component {
+                    id: "probe_0".into(),
+                    name: probe_section.clone(),
+                    details: ProbeSpec {
+                        probe_type: Property::new(probe_type, InformationSource::PrinterConfig, 0.9),
+                        uses_endstop_pin: true,
+                        dockable: false,
+                    },
+                    known_profile: None,
+                    installed: None,
+                    replaced: None,
+                });
+            }
+        }
+
+        // ── 4. Accelerometer ────────────────────────────────────
+        if let Some(ref accel_section) = config.accelerometer {
+            let exists = !profile.hardware.accelerometers.is_empty();
+            if !exists {
+                let chip = match accel_section.as_str() {
+                    "adxl345" => AccelChip::ADXL345,
+                    "lis2dw" => AccelChip::LIS2DW,
+                    "mpu9250" => AccelChip::MPU9250,
+                    _ => AccelChip::Unknown,
+                };
+                profile.hardware.accelerometers.push(Component {
+                    id: "accel_0".into(),
+                    name: accel_section.clone(),
+                    details: AccelerometerSpec {
+                        chip: Property::new(chip, InformationSource::PrinterConfig, 0.9),
+                        axes: 3,
+                        mounted_on: "toolhead".into(),
+                        bus: None,
+                    },
+                    known_profile: None,
+                    installed: None,
+                    replaced: None,
+                });
+            }
+        }
+
+        // ── 5. Thermistors ──────────────────────────────────────
+        for (section, sensor) in &config.sensor_types {
+            let sensor_type = parse_sensor_type(sensor);
+            let name = match section.as_str() {
+                "extruder" => "Extruder Thermistor",
+                "heater_bed" => "Bed Thermistor",
+                s => s,
+            };
+            let id = format!("thermistor_{}", section);
+            let exists = profile.hardware.thermistors.iter().any(|t| t.id == id);
+            if !exists {
+                profile.hardware.thermistors.push(Component {
+                    id,
+                    name: name.to_string(),
+                    details: ThermistorSpec {
+                        sensor_type: Property::new(sensor_type, InformationSource::PrinterConfig, 0.9),
+                        pull_up: None,
+                    },
+                    known_profile: None,
+                    installed: None,
+                    replaced: None,
+                });
+            }
+        }
+
+        // ── 6. Fans ─────────────────────────────────────────────
+        for fan_section in &config.fans {
+            let id = format!("fan_{}", fan_section);
+            let exists = profile.hardware.cooling.iter().any(|f| f.id == id);
+            if !exists {
+                let fan_type = if fan_section.starts_with("heater_fan") {
+                    FanType::Hotend
+                } else if fan_section.starts_with("controller_fan") {
+                    FanType::Controller
+                } else if fan_section.starts_with("exhaust_fan") {
+                    FanType::Filter
+                } else {
+                    FanType::PartCooling
+                };
+                profile.hardware.cooling.push(Component {
+                    id,
+                    name: fan_section.clone(),
+                    details: FanSpec {
+                        fan_type: Property::new(fan_type, InformationSource::PrinterConfig, 0.9),
+                        pwm: true,
+                        tachometer: false,
+                    },
+                    known_profile: None,
+                    installed: None,
+                    replaced: None,
+                });
+            }
+        }
+
+        // ── 7. Heater pins ──────────────────────────────────────
+        for (section, _pin) in &config.heater_pins {
+            let id = format!("heater_{}", section);
+            let exists = profile.hardware.heaters.iter().any(|h| h.id == id);
+            if !exists {
+                profile.hardware.heaters.push(Component {
+                    id,
+                    name: section.clone(),
+                    details: HeaterSpec {
+                        power: None,
+                        heater_type: Property::assumed(HeaterType::Unknown),
+                    },
+                    known_profile: None,
+                    installed: None,
+                    replaced: None,
+                });
+            }
+        }
+
+        // ── 8. Input shaper ─────────────────────────────────────
+        if config.input_shaper.is_some() {
+            profile.capabilities.supports_input_shaping = Property::new(
+                true,
+                InformationSource::PrinterConfig,
+                0.95,
+            );
+        }
+
+        // ── 9. Nozzle diameter ──────────────────────────────────
+        if let Some(diameter) = config.nozzle_diameter {
+            if profile.hardware.extruders.first_mut().is_some() {
+                // The ExtruderSpec doesn't have nozzle info — only HotendSpec does.
+                // We'll need to ensure a hotend exists.
+                let hotend_exists = !profile.hardware.hotends.is_empty();
+                if !hotend_exists {
+                    profile.hardware.hotends.push(Component {
+                        id: "hotend_0".into(),
+                        name: "Extruder Hotend".into(),
+                        details: HotendSpec {
+                            hotend_type: Property::assumed(HotendType::Unknown),
+                            max_temperature: Property::assumed(260.0),
+                            heater_power: None,
+                            nozzle_diameter: Some(Property::new(
+                                diameter,
+                                InformationSource::PrinterConfig,
+                                0.95,
+                            )),
+                            pt1000: Property::assumed(false),
+                            thermocouple: Property::assumed(false),
+                        },
+                        known_profile: None,
+                        installed: None,
+                        replaced: None,
+                    });
+                }
+            }
+        }
+
+        // ── 10. PID settings (log only) ─────────────────────────
+        for (heater, _pids) in &config.pid_settings {
+            tracing::info!(heater = %heater, "PID settings found in printer config");
+        }
+
+        // Re-derive capabilities and apply library matches.
+        profile.capabilities = CapabilityEngine::derive(&profile.hardware);
+        self.apply_library_to_hardware(&mut profile.hardware);
+        ConfidenceEngine::calibrate(profile);
+    }
+
     pub(crate) fn apply_library_to_hardware(&self, hardware: &mut MachineHardware) {
         // Walk every component and match against the hardware library.
         for comp in hardware.mcus.iter_mut() {
@@ -153,6 +359,35 @@ impl Default for MachineProfileBuilder {
     fn default() -> Self {
         Self::new()
     }
+}
+
+fn parse_driver_chip(name: &str) -> DriverChip {
+    let lower = name.to_lowercase();
+    if lower.starts_with("tmc2209") { DriverChip::TMC2209 }
+    else if lower.starts_with("tmc2208") { DriverChip::TMC2208 }
+    else if lower.starts_with("tmc2225") { DriverChip::TMC2225 }
+    else if lower.starts_with("tmc2226") { DriverChip::TMC2226 }
+    else if lower.starts_with("tmc5160") { DriverChip::TMC5160 }
+    else if lower.starts_with("tmc5161") { DriverChip::TMC5161 }
+    else if lower.starts_with("tmc2130") { DriverChip::TMC2130 }
+    else if lower.starts_with("tmc2240") { DriverChip::TMC2240 }
+    else if lower.starts_with("a4988") { DriverChip::A4988 }
+    else if lower.starts_with("drv8825") { DriverChip::DRV8825 }
+    else if lower.starts_with("lv8729") { DriverChip::LV8729 }
+    else { DriverChip::Unknown }
+}
+
+fn parse_sensor_type(name: &str) -> SensorType {
+    let lower = name.to_lowercase();
+    if lower.contains("104gt") || lower.contains("atc semitec") { SensorType::NTC100K }
+    else if lower.contains("3950") { SensorType::NTC3950 }
+    else if lower.contains("pt1000") { SensorType::PT1000 }
+    else if lower.contains("pt100") { SensorType::PT100 }
+    else if lower.contains("ad8495") { SensorType::AD8495 }
+    else if lower.contains("max31865") { SensorType::MAX31865 }
+    else if lower.contains("max31855") { SensorType::MAX31855 }
+    else if lower.contains("max31856") { SensorType::MAX31856 }
+    else { SensorType::Unknown }
 }
 
 #[cfg(test)]
@@ -264,5 +499,57 @@ mod tests {
         builder.apply_library_to_hardware(&mut profile.hardware);
 
         assert!(profile.hardware.probes[0].known_profile.is_none());
+    }
+
+    #[test]
+    fn enrich_from_config_adds_stepper_driver() {
+        let builder = MachineProfileBuilder::new();
+        let mut profile = builder.build("p-cfg", None, None, None);
+
+        // Give the profile a motion system with axes.
+        profile.hardware.motion_system = Some(MotionSystem {
+            kind: Property::assumed(MachineType::CoreXY),
+            axes: vec![
+                Axis { name: "x".into(), rotation_distance: None, microsteps: None, driver: None, endstop: None, rails: None, max_position: None, min_position: None },
+                Axis { name: "y".into(), rotation_distance: None, microsteps: None, driver: None, endstop: None, rails: None, max_position: None, min_position: None },
+                Axis { name: "z".into(), rotation_distance: None, microsteps: None, driver: None, endstop: None, rails: None, max_position: None, min_position: None },
+            ],
+            build_volume: None,
+            max_velocity: None, max_acceleration: None, max_z_velocity: None, square_corner_velocity: None,
+        });
+
+        let text = "[tmc2209 stepper_x]\nuart_pin: PC14\n[tmc2209 stepper_y]\nuart_pin: PC15\n[stepper_x]\nendstop_pin: ^!PC0\n[extruder]\nsensor_type: ATC Semitec 104GT-2\nnozzle_diameter: 0.400\n[adxl345]\ncs_pin: PC13\n[probe]\npin: ^!PD3\n[input_shaper]\nshaper_type_x: mzv\n[fan]\npin: PA0\n[heater_fan hotend_fan]\npin: PA1\n[heater_bed]\nheater_pin: PA2\nsensor_type: Generic 3950";
+        let config = crate::config_parser::parse_config(text);
+
+        builder.enrich_from_config(&mut profile, &config);
+
+        // Stepper drivers set.
+        let axes = &profile.hardware.motion_system.as_ref().unwrap().axes;
+        assert!(axes[0].driver.is_some());
+        assert_eq!(axes[0].driver.as_ref().unwrap().chip.value, DriverChip::TMC2209);
+        assert!(axes[1].driver.is_some());
+        assert!(axes[2].driver.is_none());
+
+        // Endstop set for x.
+        assert!(axes[0].endstop.is_some());
+        assert!(axes[1].endstop.is_none());
+
+        // Probe added.
+        assert_eq!(profile.hardware.probes.len(), 1);
+
+        // Accelerometer added.
+        assert_eq!(profile.hardware.accelerometers.len(), 1);
+
+        // Input shaping capability.
+        assert!(profile.capabilities.supports_input_shaping.value);
+
+        // Fans added (2: fan + heater_fan).
+        assert!(profile.hardware.cooling.len() >= 2);
+
+        // Thermistors added.
+        assert!(profile.hardware.thermistors.len() >= 2);
+
+        // Heater added for heater_bed.
+        assert!(profile.hardware.heaters.len() >= 1);
     }
 }

@@ -131,6 +131,15 @@ pub fn printer_info_request(id: u64) -> RpcRequest {
     RpcRequest::new("printer.info", None, id)
 }
 
+/// Build a `server.files.get_file` request to read a printer config file.
+pub fn config_file_request(path: &str, id: u64) -> RpcRequest {
+    RpcRequest::new(
+        "server.files.get_file",
+        Some(serde_json::json!({"path": path})),
+        id,
+    )
+}
+
 // ── Moonraker Printer Object Status ───────────────────────────────────
 
 /// The parsed status response from a `notify_status_update` notification.

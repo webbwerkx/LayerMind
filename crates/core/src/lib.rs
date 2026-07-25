@@ -256,12 +256,25 @@ async fn run_pipeline(config: &Config) -> layermind_shared::error::Result<()> {
             match layermind_moonraker::client::query_hardware_info(&machine_config).await {
                 Ok((printer_info, system_info, printer_objects)) => {
                     let builder = layermind_machine::MachineProfileBuilder::new();
-                    let profile = builder.build(
+                    let mut profile = builder.build(
                         &machine_config.url,
                         Some(&printer_info),
                         Some(&system_info),
                         Some(&printer_objects),
                     );
+
+                    // Also fetch and parse printer.cfg for richer details.
+                    match layermind_moonraker::client::query_config_file(&machine_config, "printer.cfg").await {
+                        Ok(content) => {
+                            let parsed = layermind_machine::config_parser::parse_config(&content);
+                            builder.enrich_from_config(&mut profile, &parsed);
+                            tracing::info!(sections = %parsed.raw.len(), "printer config parsed and applied");
+                        }
+                        Err(e) => {
+                            tracing::warn!(error = %e, "printer config not available");
+                        }
+                    }
+
                     machine_context.set_machine(&machine_config.url, profile);
                     tracing::info!("machine profile discovered and stored");
                 }
@@ -273,12 +286,24 @@ async fn run_pipeline(config: &Config) -> layermind_shared::error::Result<()> {
                         layermind_moonraker::client::query_hardware_info(&machine_config).await
                     {
                         let builder = layermind_machine::MachineProfileBuilder::new();
-                        let profile = builder.build(
+                        let mut profile = builder.build(
                             &machine_config.url,
                             Some(&printer_info),
                             Some(&system_info),
                             Some(&printer_objects),
                         );
+
+                        match layermind_moonraker::client::query_config_file(&machine_config, "printer.cfg").await {
+                            Ok(content) => {
+                                let parsed = layermind_machine::config_parser::parse_config(&content);
+                                builder.enrich_from_config(&mut profile, &parsed);
+                                tracing::info!(sections = %parsed.raw.len(), "printer config parsed and applied (retry)");
+                            }
+                            Err(e) => {
+                                tracing::warn!(error = %e, "printer config not available (retry)");
+                            }
+                        }
+
                         machine_context.set_machine(&machine_config.url, profile);
                         tracing::info!("machine profile discovered and stored (retry)");
                     }

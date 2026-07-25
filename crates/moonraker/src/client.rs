@@ -326,6 +326,92 @@ pub async fn query_hardware_info(
     ))
 }
 
+/// Connect to Moonraker, fetch a printer config file, and disconnect.
+///
+/// Uses the `server.files.get_file` Moonraker API to read config
+/// files like `printer.cfg`. Returns the raw text content.
+pub async fn query_config_file(
+    config: &MoonrakerConfig,
+    file_path: &str,
+) -> Result<String> {
+    let url = url::Url::parse(&config.url)
+        .map_err(|e| layermind_shared::error::Error::Connection(format!("invalid URL: {e}")))?;
+
+    let (ws, _resp) = tokio::time::timeout(Duration::from_secs(10), tokio_tungstenite::connect_async(url.as_str()))
+        .await
+        .map_err(|_| layermind_shared::error::Error::Connection("connect timed out".into()))?
+        .map_err(|e| layermind_shared::error::Error::Connection(format!("connect failed: {e}")))?;
+
+    let (mut ws_tx, mut ws_rx) = ws.split();
+
+    let req = protocol::config_file_request(file_path, 1);
+    let json = serde_json::to_string(&req)
+        .map_err(|e| layermind_shared::error::Error::Protocol(format!("serialize: {e}")))?;
+    ws_tx
+        .send(tokio_tungstenite::tungstenite::Message::Text(json.into()))
+        .await
+        .map_err(|e| layermind_shared::error::Error::Connection(format!("send: {e}")))?;
+
+    let deadline = tokio::time::sleep(Duration::from_secs(10));
+    tokio::pin!(deadline);
+
+    let result = loop {
+        tokio::select! {
+            msg = ws_rx.next() => {
+                match msg {
+                    Some(Ok(tokio_tungstenite::tungstenite::Message::Text(text))) => {
+                        if let Ok(rpc_msg) = serde_json::from_str::<protocol::RpcMessage>(&text) {
+                            if let Some(result) = &rpc_msg.result {
+                                // Moonraker returns file content under "content" or "contents"
+                                if let Some(content) = result
+                                    .get("content")
+                                    .or_else(|| result.get("contents"))
+                                    .and_then(|v| v.as_str())
+                                {
+                                    break Ok(content.to_string());
+                                }
+                                // Fallback: try to use the result itself as a string
+                                if let Some(s) = result.as_str() {
+                                    break Ok(s.to_string());
+                                }
+                                break Ok(result.to_string());
+                            } else if let Some(error) = &rpc_msg.error {
+                                break Err(layermind_shared::error::Error::Protocol(
+                                    format!("Moonraker error [{}]: {}", error.code, error.message),
+                                ));
+                            }
+                        }
+                    }
+                    Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_))) => {
+                        break Err(layermind_shared::error::Error::Connection(
+                            "server closed connection".into(),
+                        ));
+                    }
+                    Some(Err(e)) => {
+                        break Err(layermind_shared::error::Error::Connection(
+                            format!("WebSocket error: {e}"),
+                        ));
+                    }
+                    None => {
+                        break Err(layermind_shared::error::Error::Connection(
+                            "stream ended".into(),
+                        ));
+                    }
+                    _ => {}
+                }
+            }
+            () = &mut deadline => {
+                break Err(layermind_shared::error::Error::Connection(
+                    "config file request timed out".into(),
+                ));
+            }
+        }
+    };
+
+    let _ = ws_tx.send(tokio_tungstenite::tungstenite::Message::Close(None)).await;
+    result
+}
+
 /// Exponential backoff: 1s, 2s, 4s, 8s, 16s, 32s, 60s (capped).
 fn backoff_duration(attempt: u32) -> Duration {
     let secs = 2.0_f64.powi(attempt.saturating_sub(1) as i32).min(60.0);
