@@ -65,7 +65,10 @@ pub fn normalize(msg: &RpcMessage, state: &mut NormalizerState) -> Vec<Event> {
     let status = match StatusUpdate::from_notification(params) {
         Some(s) => s,
         None => {
-            tracing::warn!("failed to parse status update notification");
+            tracing::warn!(
+                raw = %params.to_string().chars().take(300).collect::<String>(),
+                "failed to parse status update notification"
+            );
             return events;
         }
     };

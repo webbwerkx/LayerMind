@@ -51,6 +51,7 @@ impl Database {
 
         let pool = PgPoolOptions::new()
             .max_connections(config.max_connections)
+            .acquire_timeout(std::time::Duration::from_secs(3))
             .connect(&config.url)
             .await
             .map_err(|e| Error::Database(format!("connection failed: {e}")))?;

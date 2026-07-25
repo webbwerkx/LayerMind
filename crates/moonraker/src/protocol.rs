@@ -281,12 +281,13 @@ pub struct FanState {
 
 impl StatusUpdate {
     /// Attempt to parse a `notify_status_update` notification params.
-    /// Moonraker wraps the status object in a single-element array:
-    /// `{ "params": [{ ...status... }] }`
+    /// Moonraker wraps the status object in a double-nested array:
+    /// `{ "params": [ [{ ...status... }], { eventtime: ... } ] }`
     pub fn from_notification(params: &Value) -> Option<Self> {
         let arr = params.as_array()?;
-        let obj = arr.first()?;
-        serde_json::from_value(obj.clone()).ok()
+        let inner = arr.first()?;
+        let status_obj = inner.as_array()?.first()?;
+        serde_json::from_value(status_obj.clone()).ok()
     }
 }
 

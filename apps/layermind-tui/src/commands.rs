@@ -1,12 +1,9 @@
 use std::sync::Arc;
 
-use layermind_config::Config;
 use layermind_context::ContextStore;
 use layermind_machine::MachineProfileBuilder;
 use layermind_shared::context::PrinterContext;
-use layermind_shared::history::{HistorySummary, RecentChange};
-use layermind_shared::machine::MachineProfile;
-use layermind_shared::recommendation::ValidatedRecommendation;
+use layermind_shared::history::HistorySummary;
 use tokio::sync::Mutex;
 
 use crate::app::{AppState, EventLevel, PrinterSnapshot};
@@ -19,7 +16,7 @@ pub async fn run_diagnose(state: &Arc<Mutex<AppState>>) {
     };
 
     // Build a temporary context store with minimal data.
-    let store = ContextStore::new();
+    let _store = ContextStore::new();
     let snapshot: PrinterSnapshot;
 
     // Query Moonraker for current state.
