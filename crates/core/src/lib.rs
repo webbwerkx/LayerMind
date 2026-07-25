@@ -263,15 +263,19 @@ async fn run_pipeline(config: &Config) -> layermind_shared::error::Result<()> {
                         Some(&printer_objects),
                     );
 
-                    // Also fetch and parse printer.cfg for richer details.
-                    match layermind_moonraker::client::query_config_file(&machine_config, "printer.cfg").await {
-                        Ok(content) => {
-                            let parsed = layermind_machine::config_parser::parse_config(&content);
+                    // Fetch and parse ALL printer config files.
+                    match layermind_moonraker::client::fetch_all_config_files(&machine_config).await {
+                        Ok(files) => {
+                            let parsed_configs: Vec<_> = files
+                                .values()
+                                .map(|content| layermind_machine::config_parser::parse_config(content))
+                                .collect();
+                            let parsed = layermind_machine::config_parser::merge_configs(parsed_configs);
                             builder.enrich_from_config(&mut profile, &parsed);
-                            tracing::info!(sections = %parsed.raw.len(), "printer config parsed and applied");
+                            tracing::info!(files = %files.len(), sections = %parsed.raw.len(), "printer config files parsed and applied");
                         }
                         Err(e) => {
-                            tracing::warn!(error = %e, "printer config not available");
+                            tracing::warn!(error = %e, "printer config files not available");
                         }
                     }
 
@@ -293,11 +297,15 @@ async fn run_pipeline(config: &Config) -> layermind_shared::error::Result<()> {
                             Some(&printer_objects),
                         );
 
-                        match layermind_moonraker::client::query_config_file(&machine_config, "printer.cfg").await {
-                            Ok(content) => {
-                                let parsed = layermind_machine::config_parser::parse_config(&content);
+                        match layermind_moonraker::client::fetch_all_config_files(&machine_config).await {
+                            Ok(files) => {
+                                let parsed_configs: Vec<_> = files
+                                    .values()
+                                    .map(|content| layermind_machine::config_parser::parse_config(content))
+                                    .collect();
+                                let parsed = layermind_machine::config_parser::merge_configs(parsed_configs);
                                 builder.enrich_from_config(&mut profile, &parsed);
-                                tracing::info!(sections = %parsed.raw.len(), "printer config parsed and applied (retry)");
+                                tracing::info!(files = %files.len(), sections = %parsed.raw.len(), "printer config files parsed and applied (retry)");
                             }
                             Err(e) => {
                                 tracing::warn!(error = %e, "printer config not available (retry)");

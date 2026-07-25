@@ -412,6 +412,121 @@ pub async fn query_config_file(
     result
 }
 
+/// Connect to Moonraker, list all `.cfg` files in the config directory,
+/// fetch each one, and return them as a map of filename → content.
+pub async fn fetch_all_config_files(
+    config: &MoonrakerConfig,
+) -> Result<std::collections::HashMap<String, String>> {
+    let url = url::Url::parse(&config.url)
+        .map_err(|e| layermind_shared::error::Error::Connection(format!("invalid URL: {e}")))?;
+
+    let (ws, _resp) = tokio::time::timeout(Duration::from_secs(10), tokio_tungstenite::connect_async(url.as_str()))
+        .await
+        .map_err(|_| layermind_shared::error::Error::Connection("connect timed out".into()))?
+        .map_err(|e| layermind_shared::error::Error::Connection(format!("connect failed: {e}")))?;
+
+    let (mut ws_tx, mut ws_rx) = ws.split();
+
+    // Step 1: List the config directory.
+    let list_req = protocol::list_directory_request("config", 1);
+    let json = serde_json::to_string(&list_req)
+        .map_err(|e| layermind_shared::error::Error::Protocol(format!("serialize: {e}")))?;
+    ws_tx
+        .send(tokio_tungstenite::tungstenite::Message::Text(json.into()))
+        .await
+        .map_err(|e| layermind_shared::error::Error::Connection(format!("send: {e}")))?;
+
+    let mut pending: std::collections::HashMap<u64, String> = std::collections::HashMap::new();
+    let mut results: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut listed = false;
+
+    let deadline = tokio::time::sleep(Duration::from_secs(30));
+    tokio::pin!(deadline);
+
+    let outcome = loop {
+        tokio::select! {
+            msg = ws_rx.next() => {
+                match msg {
+                    Some(Ok(tokio_tungstenite::tungstenite::Message::Text(text))) => {
+                        if let Ok(rpc_msg) = serde_json::from_str::<protocol::RpcMessage>(&text) {
+                            // Response to list request (id=1).
+                            if let (Some(serde_json::Value::Number(n)), Some(result)) = (&rpc_msg.id, &rpc_msg.result) {
+                                if n.as_i64() == Some(1) {
+                                    let mut next_id: u64 = 2;
+                                    if let Some(files) = result.as_array() {
+                                        for entry in files {
+                                            if let Some(path) = entry.get("path").and_then(|v| v.as_str()) {
+                                                if path.ends_with(".cfg") {
+                                                    pending.insert(next_id, path.to_string());
+                                                    next_id += 1;
+                                                }
+                                            }
+                                        }
+
+                                        // Send get_file requests for each .cfg file.
+                                        for (&id, path) in &pending {
+                                            let req = protocol::config_file_request(path, id);
+                                            let json = serde_json::to_string(&req)
+                                                .map_err(|e| layermind_shared::error::Error::Protocol(format!("serialize: {e}")))?;
+                                            ws_tx
+                                                .send(tokio_tungstenite::tungstenite::Message::Text(json.into()))
+                                                .await
+                                                .map_err(|e| layermind_shared::error::Error::Connection(format!("send: {e}")))?;
+                                        }
+                                    }
+                                    listed = true;
+                                }
+                            }
+
+                            // Response to a file content request.
+                            if let (Some(serde_json::Value::Number(n)), Some(result)) = (&rpc_msg.id, &rpc_msg.result) {
+                                let id = n.as_u64().unwrap_or(0);
+                                if let Some(path) = pending.remove(&id) {
+                                    let content = result
+                                        .get("content")
+                                        .or_else(|| result.get("contents"))
+                                        .and_then(|v| v.as_str())
+                                        .or_else(|| result.as_str())
+                                        .unwrap_or("");
+                                    results.insert(path, content.to_string());
+                                }
+                            } else if let Some(error) = &rpc_msg.error {
+                                if let Some(serde_json::Value::Number(n)) = &rpc_msg.id {
+                                    let id = n.as_u64().unwrap_or(0);
+                                    pending.remove(&id);
+                                    tracing::warn!(code = %error.code, msg = %error.message, "Moonraker error fetching config file");
+                                }
+                            }
+                        }
+
+                        if listed && pending.is_empty() {
+                            break Ok(());
+                        }
+                    }
+                    Some(Ok(tokio_tungstenite::tungstenite::Message::Close(_))) => break Err(
+                        layermind_shared::error::Error::Connection("server closed connection".into()),
+                    ),
+                    Some(Err(e)) => break Err(layermind_shared::error::Error::Connection(
+                        format!("WebSocket error: {e}"),
+                    )),
+                    None => break Err(layermind_shared::error::Error::Connection("stream ended".into())),
+                    _ => {}
+                }
+            }
+            () = &mut deadline => {
+                break Err(layermind_shared::error::Error::Connection(
+                    "config fetch timed out".into(),
+                ));
+            }
+        }
+    };
+
+    let _ = ws_tx.send(tokio_tungstenite::tungstenite::Message::Close(None)).await;
+    outcome?;
+
+    Ok(results)
+}
+
 /// Exponential backoff: 1s, 2s, 4s, 8s, 16s, 32s, 60s (capped).
 fn backoff_duration(attempt: u32) -> Duration {
     let secs = 2.0_f64.powi(attempt.saturating_sub(1) as i32).min(60.0);

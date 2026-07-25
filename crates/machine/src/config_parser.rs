@@ -74,6 +74,57 @@ pub struct ParsedConfig {
 /// Parse the text content of a Klipper config file.
 pub fn parse_config(text: &str) -> ParsedConfig {
     let mut config = ParsedConfig::default();
+    parse_into(&mut config, text);
+    config
+}
+
+/// Merge multiple parsed configs into a single combined config.
+/// Later files overwrite earlier files for duplicate keys.
+pub fn merge_configs(configs: impl IntoIterator<Item = ParsedConfig>) -> ParsedConfig {
+    let mut merged = ParsedConfig::default();
+    for config in configs {
+        for (section, kv) in config.raw {
+            let entry = merged.raw.entry(section).or_default();
+            for (k, v) in kv {
+                entry.insert(k, v);
+            }
+        }
+        merged.stepper_drivers.extend(config.stepper_drivers);
+        merged.endstops.extend(config.endstops);
+        merged.sensor_types.extend(config.sensor_types);
+        if config.probe.is_some() {
+            merged.probe = config.probe;
+        }
+        if config.accelerometer.is_some() {
+            merged.accelerometer = config.accelerometer;
+        }
+        if config.input_shaper.is_some() {
+            merged.input_shaper = config.input_shaper;
+        }
+        merged.microsteps.extend(config.microsteps);
+        merged.rotation_distance.extend(config.rotation_distance);
+        merged.position_max.extend(config.position_max);
+        if config.nozzle_diameter.is_some() {
+            merged.nozzle_diameter = config.nozzle_diameter;
+        }
+        if config.filament_diameter.is_some() {
+            merged.filament_diameter = config.filament_diameter;
+        }
+        merged.heater_pins.extend(config.heater_pins);
+        for fan in config.fans {
+            if !merged.fans.contains(&fan) {
+                merged.fans.push(fan);
+            }
+        }
+        merged.includes.extend(config.includes);
+        for (heater, pids) in config.pid_settings {
+            merged.pid_settings.entry(heater).or_default().extend(pids);
+        }
+    }
+    merged
+}
+
+fn parse_into(config: &mut ParsedConfig, text: &str) {
     let mut current_section: Option<String> = None;
 
     for line in text.lines() {
@@ -115,11 +166,9 @@ pub fn parse_config(text: &str) -> ParsedConfig {
             config.raw.entry(section.clone()).or_default().insert(key.clone(), value.clone());
 
             // Extract known hardware details.
-            extract_hardware_detail(&mut config, &section, &key, &value);
+            extract_hardware_detail(config, &section, &key, &value);
         }
     }
-
-    config
 }
 
 fn extract_hardware_detail(

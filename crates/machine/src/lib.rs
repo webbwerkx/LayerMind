@@ -27,7 +27,7 @@ pub mod library;
 
 pub use builder::MachineProfileBuilder;
 pub use capability::CapabilityEngine;
-pub use config_parser::{parse_config, ParsedConfig};
+pub use config_parser::{merge_configs, parse_config, ParsedConfig};
 pub use confidence::ConfidenceEngine;
 pub use discovery::HardwareDiscovery;
 pub use library::HardwareLibrary;
