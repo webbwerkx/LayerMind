@@ -427,8 +427,8 @@ pub async fn fetch_all_config_files(
 
     let (mut ws_tx, mut ws_rx) = ws.split();
 
-    // Step 1: List the config directory.
-    let list_req = protocol::list_directory_request("config", 1);
+    // Step 1: List the config root directory.
+    let list_req = protocol::list_directory_request("", 1);
     let json = serde_json::to_string(&list_req)
         .map_err(|e| layermind_shared::error::Error::Protocol(format!("serialize: {e}")))?;
     ws_tx
@@ -452,8 +452,19 @@ pub async fn fetch_all_config_files(
                             // Response to list request (id=1).
                             if let (Some(serde_json::Value::Number(n)), Some(result)) = (&rpc_msg.id, &rpc_msg.result) {
                                 if n.as_i64() == Some(1) {
+                                    tracing::debug!(
+                                        result = %result.to_string().chars().take(500).collect::<String>(),
+                                        "config file list response"
+                                    );
+
+                                    // Try to extract file paths from the response.
+                                    // Moonraker may return an array directly, or an object with a "files" key.
+                                    let file_entries = result
+                                        .as_array()
+                                        .or_else(|| result.get("files").and_then(|v| v.as_array()));
+
                                     let mut next_id: u64 = 2;
-                                    if let Some(files) = result.as_array() {
+                                    if let Some(files) = file_entries {
                                         for entry in files {
                                             if let Some(path) = entry.get("path").and_then(|v| v.as_str()) {
                                                 if path.ends_with(".cfg") {
@@ -462,17 +473,31 @@ pub async fn fetch_all_config_files(
                                                 }
                                             }
                                         }
+                                    }
 
-                                        // Send get_file requests for each .cfg file.
-                                        for (&id, path) in &pending {
-                                            let req = protocol::config_file_request(path, id);
-                                            let json = serde_json::to_string(&req)
-                                                .map_err(|e| layermind_shared::error::Error::Protocol(format!("serialize: {e}")))?;
-                                            ws_tx
-                                                .send(tokio_tungstenite::tungstenite::Message::Text(json.into()))
-                                                .await
-                                                .map_err(|e| layermind_shared::error::Error::Connection(format!("send: {e}")))?;
+                                    // Fallback: use known config filenames if listing returned nothing.
+                                    if pending.is_empty() {
+                                        tracing::warn!("config file listing returned no results, trying known filenames");
+                                        let known = [
+                                            "printer.cfg", "mainsail.cfg", "macros.cfg",
+                                            "adxl.cfg", "bed_mesh.cfg", "display.cfg",
+                                            "moonraker.conf", "crowsnest.conf",
+                                        ];
+                                        for path in &known {
+                                            pending.insert(next_id, path.to_string());
+                                            next_id += 1;
                                         }
+                                    }
+
+                                    // Send get_file requests for each file.
+                                    for (&id, path) in &pending {
+                                        let req = protocol::config_file_request(path, id);
+                                        let json = serde_json::to_string(&req)
+                                            .map_err(|e| layermind_shared::error::Error::Protocol(format!("serialize: {e}")))?;
+                                        ws_tx
+                                            .send(tokio_tungstenite::tungstenite::Message::Text(json.into()))
+                                            .await
+                                            .map_err(|e| layermind_shared::error::Error::Connection(format!("send: {e}")))?;
                                     }
                                     listed = true;
                                 }
