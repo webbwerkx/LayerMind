@@ -12,6 +12,7 @@ use layermind_config::Config;
 use layermind_context::ContextStore;
 use layermind_machine::MachineProfileBuilder;
 use layermind_reasoning::diagnostic::{DiagnoseError, PrintDoctor};
+use layermind_reasoning::provider::MockProvider;
 use layermind_reasoning::AiProvider;
 use layermind_shared::context::PrinterContext;
 use layermind_shared::recommendation::ValidatedRecommendation;
@@ -28,15 +29,28 @@ pub async fn bootstrap(config: &Config) -> anyhow::Result<Runtime> {
         "LayerMind bootstrapping"
     );
 
-    // ── AI provider ──────────────────────────────────────────
-    let provider: Arc<dyn AiProvider> = layermind_ai::create_provider(&config.provider)
-        .map_err(|e| anyhow::anyhow!("failed to create AI provider: {}", e))?;
-
-    tracing::info!(
-        provider = %provider.name(),
-        model = %provider.model(),
-        "AI provider ready"
-    );
+    // ── AI provider (optional — fallback to mock) ────────────
+    let provider: Arc<dyn AiProvider> = match layermind_ai::create_provider(&config.provider) {
+        Ok(p) => {
+            tracing::info!(
+                provider = %p.name(),
+                model = %p.model(),
+                "AI provider ready"
+            );
+            p
+        }
+        Err(e) => {
+            tracing::warn!(
+                error = %e,
+                "AI provider unavailable, using mock fallback. Set LAYERMIND_PROVIDER and LAYERMIND_MODEL to enable AI diagnostics."
+            );
+            Arc::new(layermind_reasoning::provider::MockProvider::new(
+                "mock-fallback",
+                "none",
+                r#"{"actions":[],"summary":"AI provider not configured"}"#,
+            ))
+        }
+    };
 
     // ── Context store (shared across all consumers) ──────────
     let context_store = Arc::new(ContextStore::new());
