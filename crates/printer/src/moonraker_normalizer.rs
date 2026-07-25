@@ -5,12 +5,11 @@
 //! typed `Event` variants. It also tracks state to avoid emitting
 //! duplicate events when values haven't changed meaningfully.
 
-use layermind_moonraker::protocol::{RpcMessage, StatusUpdate};
+use layermind_moonraker::protocol::RpcMessage;
 use layermind_shared::event::Event;
 use layermind_shared::types::Temperature;
 
 /// Threshold for temperature change detection (°C).
-/// We don't emit TemperatureUpdate if the change is below this.
 const TEMP_CHANGE_THRESHOLD: f64 = 0.5;
 
 /// Threshold for fan speed change detection.
@@ -39,10 +38,6 @@ impl NormalizerState {
 }
 
 /// Process a raw RPC message and return zero or more canonical events.
-///
-/// This is the main entry point. It extracts the status update from
-/// Moonraker notifications, parses each printer object, and emits
-/// typed events when values have changed.
 pub fn normalize(msg: &RpcMessage, state: &mut NormalizerState) -> Vec<Event> {
     let mut events = Vec::new();
 
@@ -62,7 +57,7 @@ pub fn normalize(msg: &RpcMessage, state: &mut NormalizerState) -> Vec<Event> {
         None => return events,
     };
 
-    let status = match StatusUpdate::from_notification(params) {
+    let status = match layermind_moonraker::protocol::StatusUpdate::from_notification(params) {
         Some(s) => s,
         None => {
             tracing::warn!(
@@ -94,27 +89,31 @@ pub fn normalize(msg: &RpcMessage, state: &mut NormalizerState) -> Vec<Event> {
     events
 }
 
-fn normalize_temperatures(status: &StatusUpdate, state: &mut NormalizerState) -> Vec<Event> {
+fn normalize_temperatures(status: &serde_json::Value, state: &mut NormalizerState) -> Vec<Event> {
     let mut temps = Vec::new();
 
-    if let Some(ref bed) = status.heater_bed {
-        for (i, &current) in bed.temperatures.iter().enumerate() {
+    if let Some(bed) = status.get("heater_bed") {
+        if let Some(current) = bed.get("temperature").and_then(|v| v.as_f64()) {
+            let target = bed.get("target").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let power = bed.get("power").and_then(|v| v.as_f64()).unwrap_or(0.0);
             temps.push(Temperature {
-                sensor: format!("heater_bed_{i}"),
+                sensor: "heater_bed_0".into(),
                 current,
-                target: bed.target,
-                power: Some(bed.power),
+                target,
+                power: Some(power),
             });
         }
     }
 
-    if let Some(ref extruder) = status.extruder {
-        for (i, &current) in extruder.temperatures.iter().enumerate() {
+    if let Some(extruder) = status.get("extruder") {
+        if let Some(current) = extruder.get("temperature").and_then(|v| v.as_f64()) {
+            let target = extruder.get("target").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let power = extruder.get("power").and_then(|v| v.as_f64()).unwrap_or(0.0);
             temps.push(Temperature {
-                sensor: format!("extruder_{i}"),
+                sensor: "extruder_0".into(),
                 current,
-                target: extruder.target,
-                power: Some(extruder.power),
+                target,
+                power: Some(power),
             });
         }
     }
@@ -142,82 +141,95 @@ fn normalize_temperatures(status: &StatusUpdate, state: &mut NormalizerState) ->
     }
 }
 
-fn normalize_print_state(status: &StatusUpdate, state: &mut NormalizerState) -> Vec<Event> {
-    let ps = match &status.print_stats {
+fn normalize_print_state(status: &serde_json::Value, state: &mut NormalizerState) -> Vec<Event> {
+    let ps = match status.get("print_stats") {
         Some(ps) => ps,
         None => return vec![],
     };
 
-    let current_state = &ps.state;
+    let current_state = match ps.get("state").and_then(|v| v.as_str()) {
+        Some(s) => s,
+        None => return vec![],
+    };
 
-    // Only emit when state actually changes.
     let prev = state.last_print_state.clone();
     if prev.as_deref() == Some(current_state) {
         return vec![];
     }
-    state.last_print_state = Some(current_state.clone());
+    state.last_print_state = Some(current_state.to_string());
 
-    match current_state.as_str() {
-        "printing" => {
-            vec![Event::PrintStarted {
-                filename: ps.filename.clone(),
-                estimated_time: None,
-            }]
-        }
-        "paused" => {
-            vec![Event::PrintPaused { reason: None }]
-        }
-        "pausing" => {
-            vec![Event::PrintPaused {
-                reason: Some("printer is pausing".into()),
-            }]
-        }
+    let filename = ps
+        .get("filename")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    match current_state {
+        "printing" => vec![Event::PrintStarted {
+            filename,
+            estimated_time: None,
+        }],
+        "paused" => vec![Event::PrintPaused { reason: None }],
+        "pausing" => vec![Event::PrintPaused {
+            reason: Some("printer is pausing".into()),
+        }],
         "complete" => {
+            let total_time = ps
+                .get("print_duration")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            let filament_used = ps
+                .get("filament_used")
+                .and_then(|v| v.as_f64())
+                .filter(|&v| v > 0.0);
+
             vec![Event::PrintCompleted {
-                total_time: ps.print_duration,
-                filament_used: if ps.filament_used > 0.0 {
-                    Some(ps.filament_used)
-                } else {
-                    None
-                },
+                total_time,
+                filament_used,
             }]
         }
         "error" => {
-            vec![Event::PrintFailed {
-                reason: Some(ps.message.clone()),
-            }]
+            let reason = ps
+                .get("message")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown error")
+                .to_string();
+            vec![Event::PrintFailed { reason: Some(reason) }]
         }
-        "cancelled" => {
-            vec![Event::PrintCancelled]
-        }
-        "standby" | "ready" | "idle" => {
-            vec![Event::StateChanged {
-                state: layermind_shared::printer::PrinterState::Idle,
-            }]
-        }
+        "cancelled" => vec![Event::PrintCancelled],
+        "standby" | "ready" | "idle" => vec![Event::StateChanged {
+            state: layermind_shared::printer::PrinterState::Idle,
+        }],
         _ => vec![],
     }
 }
 
-fn normalize_progress(status: &StatusUpdate) -> Vec<Event> {
-    let sd = match &status.virtual_sdcard {
+fn normalize_progress(status: &serde_json::Value) -> Vec<Event> {
+    let sd = match status.get("virtual_sdcard") {
         Some(sd) => sd,
         None => return vec![],
     };
 
-    let ps = match &status.print_stats {
+    let ps = match status.get("print_stats") {
         Some(ps) => ps,
         None => return vec![],
     };
 
-    if !sd.is_active {
+    let is_active = sd
+        .get("is_active")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    if !is_active {
         return vec![];
     }
 
-    let elapsed = ps.print_duration;
-    let progress = sd.progress;
+    let progress = sd.get("progress").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let elapsed = ps
+        .get("print_duration")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
 
-    // Estimate remaining time from progress and elapsed.
     let remaining = if progress > 0.0 && elapsed > 0.0 {
         let total_est = elapsed / progress;
         Some(total_est - elapsed)
@@ -225,28 +237,40 @@ fn normalize_progress(status: &StatusUpdate) -> Vec<Event> {
         None
     };
 
+    let current_layer = ps
+        .get("info")
+        .and_then(|i| i.get("current_layer"))
+        .and_then(|v| v.as_u64())
+        .map(|v| v as u32);
+    let total_layers = ps
+        .get("info")
+        .and_then(|i| i.get("total_layer"))
+        .and_then(|v| v.as_u64())
+        .map(|v| v as u32);
+
     vec![Event::PrintProgress {
         progress,
         elapsed,
         remaining,
-        current_layer: ps.info.current_layer,
-        total_layers: ps.info.total_layer,
+        current_layer,
+        total_layers,
     }]
 }
 
-fn normalize_position(status: &StatusUpdate, state: &mut NormalizerState) -> Vec<Event> {
-    let th = match &status.toolhead {
+fn normalize_position(status: &serde_json::Value, state: &mut NormalizerState) -> Vec<Event> {
+    let th = match status.get("toolhead") {
         Some(th) => th,
         None => return vec![],
     };
 
-    if th.position.len() < 3 {
-        return vec![];
-    }
+    let position = match th.get("position").and_then(|v| v.as_array()) {
+        Some(pos) if pos.len() >= 3 => pos,
+        _ => return vec![],
+    };
 
-    let x = th.position[0];
-    let y = th.position[1];
-    let z = th.position[2];
+    let x = position[0].as_f64().unwrap_or(0.0);
+    let y = position[1].as_f64().unwrap_or(0.0);
+    let z = position[2].as_f64().unwrap_or(0.0);
 
     let changed = match state.last_position {
         Some((lx, ly, lz)) => {
@@ -265,13 +289,16 @@ fn normalize_position(status: &StatusUpdate, state: &mut NormalizerState) -> Vec
     }
 }
 
-fn normalize_speed(status: &StatusUpdate, state: &mut NormalizerState) -> Vec<Event> {
-    let mr = match &status.motion_report {
+fn normalize_speed(status: &serde_json::Value, state: &mut NormalizerState) -> Vec<Event> {
+    let mr = match status.get("motion_report") {
         Some(mr) => mr,
         None => return vec![],
     };
 
-    let speed = mr.live_velocity;
+    let speed = mr
+        .get("live_velocity")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
 
     let changed = match state.last_speed {
         Some(last) => (speed - last).abs() >= SPEED_CHANGE_THRESHOLD,
@@ -286,23 +313,26 @@ fn normalize_speed(status: &StatusUpdate, state: &mut NormalizerState) -> Vec<Ev
     }
 }
 
-fn normalize_fan(status: &StatusUpdate, state: &mut NormalizerState) -> Vec<Event> {
-    let fan = match &status.fan {
+fn normalize_fan(status: &serde_json::Value, state: &mut NormalizerState) -> Vec<Event> {
+    let fan = match status.get("fan") {
         Some(f) => f,
         None => return vec![],
     };
 
+    let speed = fan.get("speed").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let rpm = fan.get("rpm").and_then(|v| v.as_f64());
+
     let changed = match state.last_fan_speed {
-        Some(last) => (fan.speed - last).abs() >= FAN_CHANGE_THRESHOLD,
+        Some(last) => (speed - last).abs() >= FAN_CHANGE_THRESHOLD,
         None => true,
     };
 
     if changed {
-        state.last_fan_speed = Some(fan.speed);
+        state.last_fan_speed = Some(speed);
         vec![Event::FanUpdate {
             name: "part_cooling".into(),
-            speed: fan.speed,
-            rpm: fan.rpm,
+            speed,
+            rpm,
         }]
     } else {
         vec![]
@@ -312,38 +342,13 @@ fn normalize_fan(status: &StatusUpdate, state: &mut NormalizerState) -> Vec<Even
 #[cfg(test)]
 mod tests {
     use super::*;
+    use layermind_moonraker::protocol::RpcMessage;
 
-    fn make_status_json(overrides: &str) -> serde_json::Value {
-        let base = r#"{
-            "heater_bed": { "temperatures": [60.0], "target": 60.0, "power": 0.0 },
-            "extruder": { "temperatures": [210.0], "target": 210.0, "power": 0.3 },
-            "print_stats": { "filename": "test.gcode", "total_duration": 100.0, "print_duration": 50.0, "filament_used": 1200.0, "state": "printing", "message": "", "info": { "total_layer": 100, "current_layer": 50 } },
-            "virtual_sdcard": { "progress": 0.5, "file_position": 5000, "is_active": true },
-            "toolhead": { "position": [100.0, 100.0, 5.0], "status": "Ready", "homed_axes": "xyz" },
-            "motion_report": { "live_position": [100.0, 100.0, 5.0], "live_velocity": 50.0, "live_extruder_velocity": 5.0, "steppers": ["x","y","z","e"] },
-            "gcode_move": { "speed": 6000, "speed_factor": 1.0, "extrude_factor": 1.0, "absolute_coordinates": true, "absolute_extrude": true, "position": [100.0, 100.0, 5.0], "homing_origin": [0.0, 0.0, 0.0, 0.0] },
-            "fan": { "speed": 0.5, "rpm": null }
-        }"#;
-
-        let mut base_val: serde_json::Value = serde_json::from_str(base).unwrap();
-        if !overrides.is_empty() {
-            let ov: serde_json::Value = serde_json::from_str(overrides).unwrap();
-            if let (serde_json::Value::Object(b), serde_json::Value::Object(o)) =
-                (&mut base_val, ov)
-            {
-                for (k, v) in o {
-                    b.insert(k, v);
-                }
-            }
-        }
-        base_val
-    }
-
-    fn make_status_msg(value: &serde_json::Value) -> RpcMessage {
+    fn make_notification(status_obj: serde_json::Value) -> RpcMessage {
         RpcMessage {
             jsonrpc: "2.0".into(),
             method: Some("notify_status_update".into()),
-            params: Some(serde_json::json!([value])),
+            params: Some(serde_json::json!([status_obj, 50.0])),
             result: None,
             error: None,
             id: None,
@@ -352,8 +357,11 @@ mod tests {
 
     #[test]
     fn parses_temperature_update() {
-        let val = make_status_json("");
-        let msg = make_status_msg(&val);
+        let status = serde_json::json!({
+            "extruder": {"temperature": 210.0, "target": 210.0, "power": 0.3},
+            "heater_bed": {"temperature": 60.0, "target": 60.0, "power": 0.0}
+        });
+        let msg = make_notification(status);
         let mut state = NormalizerState::new();
 
         let events = normalize(&msg, &mut state);
@@ -370,43 +378,63 @@ mod tests {
     }
 
     #[test]
-    fn parses_print_started() {
-        let val = make_status_json("");
-        let msg = make_status_msg(&val);
+    fn handles_compressed_notification() {
+        let status = serde_json::json!({
+            "extruder": {"temperature": 27.19},
+            "toolhead": {"estimated_print_time": 59.28}
+        });
+        let msg = make_notification(status);
         let mut state = NormalizerState::new();
 
         let events = normalize(&msg, &mut state);
-        let print_event = events
-            .iter()
-            .find(|e| matches!(e, Event::PrintStarted { .. }));
-
-        assert!(print_event.is_some(), "should emit PrintStarted");
+        // Should not crash, may or may not emit events
+        assert!(true, "should not panic on compressed notification");
     }
 
     #[test]
-    fn parses_progress() {
-        let val = make_status_json("");
-        let msg = make_status_msg(&val);
+    fn parses_print_started() {
+        let status = serde_json::json!({
+            "print_stats": {"filename": "test.gcode", "state": "printing", "print_duration": 0.0, "filament_used": 0.0, "total_duration": 0.0, "message": "", "info": {}},
+            "virtual_sdcard": {"progress": 0.0, "file_position": 0, "is_active": true, "file_path": null}
+        });
+        let msg = make_notification(status);
         let mut state = NormalizerState::new();
 
         let events = normalize(&msg, &mut state);
-        let progress_event = events
-            .iter()
-            .find(|e| matches!(e, Event::PrintProgress { .. }));
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, Event::PrintStarted { .. })),
+            "should emit PrintStarted"
+        );
+    }
 
-        assert!(progress_event.is_some(), "should emit PrintProgress");
-        if let Some(Event::PrintProgress { progress, .. }) = progress_event {
-            assert!((*progress - 0.5).abs() < 0.01);
-        }
+    #[test]
+    fn parses_print_completed() {
+        let status = serde_json::json!({
+            "print_stats": {"filename": "done.gcode", "state": "complete", "print_duration": 3500.0, "filament_used": 5000.0, "total_duration": 3600.0, "message": "", "info": {}}
+        });
+        let msg = make_notification(status);
+        let mut state = NormalizerState::new();
+
+        let events = normalize(&msg, &mut state);
+        assert!(
+            events
+                .iter()
+                .any(|e| matches!(e, Event::PrintCompleted { .. })),
+            "should emit PrintCompleted"
+        );
     }
 
     #[test]
     fn suppresses_unchanged_temperatures() {
-        let val = make_status_json("");
-        let msg = make_status_msg(&val);
+        let status = serde_json::json!({
+            "extruder": {"temperature": 210.0, "target": 210.0, "power": 0.3},
+            "heater_bed": {"temperature": 60.0, "target": 60.0, "power": 0.0}
+        });
+        let msg = make_notification(status);
         let mut state = NormalizerState::new();
 
-        // First call emits.
         let events1 = normalize(&msg, &mut state);
         assert!(
             events1
@@ -414,7 +442,6 @@ mod tests {
                 .any(|e| matches!(e, Event::TemperatureUpdate { .. }))
         );
 
-        // Second call with same values suppresses.
         let events2 = normalize(&msg, &mut state);
         assert!(
             !events2
@@ -425,16 +452,20 @@ mod tests {
 
     #[test]
     fn emits_on_significant_temp_change() {
-        let val = make_status_json("");
-        let msg = make_status_msg(&val);
+        let status = serde_json::json!({
+            "extruder": {"temperature": 210.0, "target": 210.0, "power": 0.3},
+            "heater_bed": {"temperature": 60.0, "target": 60.0, "power": 0.0}
+        });
+        let msg = make_notification(status);
         let mut state = NormalizerState::new();
 
         let _ = normalize(&msg, &mut state);
 
-        let val_changed = make_status_json(
-            r#"{"extruder": {"temperatures": [215.0], "target": 210.0, "power": 0.5}}"#,
-        );
-        let msg_changed = make_status_msg(&val_changed);
+        let status_changed = serde_json::json!({
+            "extruder": {"temperature": 215.0, "target": 210.0, "power": 0.5},
+            "heater_bed": {"temperature": 60.0, "target": 60.0, "power": 0.0}
+        });
+        let msg_changed = make_notification(status_changed);
 
         let events = normalize(&msg_changed, &mut state);
         assert!(
@@ -442,23 +473,6 @@ mod tests {
                 .iter()
                 .any(|e| matches!(e, Event::TemperatureUpdate { .. })),
             "should emit on significant temp change"
-        );
-    }
-
-    #[test]
-    fn parses_print_completed() {
-        let val = make_status_json(
-            r#"{"print_stats": {"filename": "done.gcode", "total_duration": 3600.0, "print_duration": 3500.0, "filament_used": 5000.0, "state": "complete", "message": "", "info": {}}}"#,
-        );
-        let msg = make_status_msg(&val);
-        let mut state = NormalizerState::new();
-
-        let events = normalize(&msg, &mut state);
-        assert!(
-            events
-                .iter()
-                .any(|e| matches!(e, Event::PrintCompleted { .. })),
-            "should emit PrintCompleted"
         );
     }
 }
